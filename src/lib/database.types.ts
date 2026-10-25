@@ -17,7 +17,7 @@ export type Settings = {
   slot_minutes: number; open_time: string; close_time: string; open_days: number[];
   online_booking_enabled: boolean; online_requires_approval: boolean; online_min_notice_minutes: number;
   online_max_days_ahead: number; online_cancel_limit_minutes: number; kdv_rate: number;
-  whatsapp_number: string; instagram_url: string; google_review_url: string; updated_at: string;
+  whatsapp_number: string; instagram_url: string; google_review_url: string; import_token: string; updated_at: string;
 };
 
 export type ServiceCategory = {
@@ -54,7 +54,7 @@ export type Customer = {
 
 export type Visit = {
   id: string; customer_id: string | null; visit_date: string; status: VisitStatus; source: VisitSource;
-  notes: string; internal_notes: string; discount_percent: number; prepaid_amount: number; created_by: string | null;
+  notes: string; internal_notes: string; discount_percent: number; prepaid_amount: number; created_by: string | null; import_ref: string | null;
 } & Timestamps;
 
 export type VisitItem = {
