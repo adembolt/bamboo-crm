@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { todayIso, addDays, money, fmtDate, minutesOfDay } from "@/lib/format";
-import { Donut, Bars, foldSlices, SERIES } from "@/components/charts";
+import { Donut, Bars } from "@/components/charts";
+import { foldSlices, SERIES } from "@/lib/charts";
 
 export const metadata = { title: "Raporlar" };
 
