@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* Bamboo Beauty Lifes — Salon Kasası ile aynı marka paleti */
+:root {
+  --ground: #f3f6f1; --surface: #ffffff; --sunk: #eaf0e8; --ink: #14261a; --muted: #5b6b5f; --line: #d6dfd5;
+  --green: #0a7a1e; --green-soft: #ddefdf; --gold: #a8854a; --gold-soft: #f3ead9;
+  --good: #1e8a3a; --warn: #b7790b; --bad: #c0392b; --good-bg: #e1f2e5; --warn-bg: #fbf0d9; --bad-bg: #f9e3e0;
+  --shadow: 0 1px 2px rgba(20,38,26,.06), 0 6px 24px rgba(20,38,26,.06);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0e1511; --surface: #16201a; --sunk: #1c2821; --ink: #e4ece5; --muted: #98a89c; --line: #2a3830;
+    --green: #46b862; --green-soft: #1d3424; --gold: #d2ae6f; --gold-soft: #322a1c;
+    --good: #5bc977; --warn: #e3aa3d; --bad: #ee7564; --good-bg: #183222; --warn-bg: #342a15; --bad-bg: #3a1d1a;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.25);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-sunk: var(--sunk);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-green: var(--green);
+  --color-green-soft: var(--green-soft);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-good-bg: var(--good-bg);
+  --color-warn-bg: var(--warn-bg);
+  --color-bad-bg: var(--bad-bg);
+  --font-display: "Quicksand", ui-rounded, system-ui, sans-serif;
+  --font-sans: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow-card: var(--shadow);
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; text-wrap: balance; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* Ortak bileşen sınıfları */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.inp { display: flex; align-items: center; background: var(--sunk); border: 1.5px solid transparent; border-radius: 10px; padding: 0 12px; min-width: 0; }
+.inp:focus-within { border-color: var(--green); background: var(--surface); }
+.inp input, .inp select, .inp textarea { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 600 15px var(--font-sans); padding: 9px 0; outline: none; }
+.inp textarea { font-weight: 500; resize: vertical; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 10px; padding: 10px 16px; font: 600 14px var(--font-sans); cursor: pointer; background: var(--green); color: #fff; white-space: nowrap; }
+.btn:disabled { opacity: .6; cursor: progress; }
+.btn.ghost { background: var(--sunk); color: var(--ink); }
+.btn.danger { background: var(--bad-bg); color: var(--bad); }
+.btn.sm { padding: 7px 12px; font-size: 13px; border-radius: 8px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font: 700 12px var(--font-sans); padding: 4px 10px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+.pill.good { background: var(--good-bg); color: var(--good); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+.pill.gold { background: var(--gold-soft); color: var(--gold); }
+.eyebrow { font: 700 11.5px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+label.f { display: grid; gap: 5px; font-size: 13px; font-weight: 600; color: var(--muted); min-width: 0; }
+.switch { position: relative; width: 42px; height: 24px; border-radius: 999px; background: var(--line); border: 0; cursor: pointer; transition: background .15s; flex: none; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.switch[aria-checked="true"] { background: var(--green); }
+.switch[aria-checked="true"]::after { transform: translateX(18px); }
+.switch:disabled { opacity: .5; cursor: progress; }
+:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
