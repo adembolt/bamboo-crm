@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 const items = [
   { href: "/panel", label: "Bugün", icon: "◎" },
   { href: "/panel/takvim", label: "Takvim", icon: "▦" },
+  { href: "/panel/kasa", label: "Kasa", icon: "₺" },
   { href: "/panel/musteriler", label: "Müşteriler", icon: "☺" },
   { href: "/panel/hizmetler", label: "Hizmetler", icon: "✦" },
   { href: "/panel/personel", label: "Personel", icon: "⚑" },

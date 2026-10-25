@@ -68,6 +68,24 @@ export type CustomerPackage = {
   used_sessions: number; price_paid: number; purchased_at: string; expires_at: string | null; notes: string; created_at: string;
 };
 
+export type Expense = {
+  id: string; expense_date: string; category: string; description: string; amount: number; method: PayMethod;
+  staff_id: string | null; created_by: string | null; created_at: string;
+};
+export type Sale = {
+  id: string; visit_id: string | null; customer_id: string | null; sale_date: string; subtotal: number; discount: number;
+  total: number; notes: string; created_by: string | null; created_at: string;
+};
+export type SalePayment = { id: string; sale_id: string; method: PayMethod; amount: number };
+export type SaleItem = {
+  id: string; sale_id: string; visit_item_id: string | null; kind: "service" | "product"; name: string; staff_id: string | null;
+  qty: number; unit_price: number; discount: number; total: number;
+};
+export type StaffPayout = {
+  id: string; staff_id: string; period_start: string; period_end: string; amount: number; method: PayMethod; notes: string;
+  paid_at: string; created_by: string | null; created_at: string;
+};
+
 export type BookingRequest = {
   id: string; first_name: string; last_name: string; phone: string; email: string; locale: string;
   service_id: string; staff_id: string | null; starts_at: string; notes: string;
@@ -101,6 +119,11 @@ export type Database = {
       visits: Tbl<Visit, Exclude<keyof Visit, "visit_date">, [R<"visits_customer_id_fkey","customer_id","customers">]>;
       visit_items: Tbl<VisitItem, "service_id" | "staff_id" | "resource_id" | "price" | "discount" | "status" | "package_id" | "notes", [R<"visit_items_visit_id_fkey","visit_id","visits">, R<"visit_items_staff_id_fkey","staff_id","staff">, R<"visit_items_service_id_fkey","service_id","services">]>;
       customer_packages: Tbl<CustomerPackage, "service_id" | "used_sessions" | "price_paid" | "purchased_at" | "expires_at" | "notes", [R<"customer_packages_customer_id_fkey","customer_id","customers">]>;
+      expenses: Tbl<Expense, "expense_date" | "category" | "description" | "method" | "staff_id" | "created_by", [R<"expenses_staff_id_fkey","staff_id","staff">]>;
+      sales: Tbl<Sale, "visit_id" | "customer_id" | "sale_date" | "subtotal" | "discount" | "total" | "notes" | "created_by", [R<"sales_visit_id_fkey","visit_id","visits">, R<"sales_customer_id_fkey","customer_id","customers">]>;
+      sale_payments: Tbl<SalePayment, never, [R<"sale_payments_sale_id_fkey","sale_id","sales">]>;
+      sale_items: Tbl<SaleItem, "visit_item_id" | "kind" | "staff_id" | "qty" | "unit_price" | "discount" | "total", [R<"sale_items_sale_id_fkey","sale_id","sales">, R<"sale_items_staff_id_fkey","staff_id","staff">]>;
+      staff_payouts: Tbl<StaffPayout, "method" | "notes" | "paid_at" | "created_by", [R<"staff_payouts_staff_id_fkey","staff_id","staff">]>;
       booking_requests: Tbl<BookingRequest, "last_name" | "email" | "locale" | "staff_id" | "notes" | "status" | "visit_id" | "ip_hash", [R<"booking_requests_service_id_fkey","service_id","services">, R<"booking_requests_staff_id_fkey","staff_id","staff">]>;
     };
     Views: {

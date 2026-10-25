@@ -287,6 +287,7 @@ function VisitCard(props: { items: DayItem[]; date: string; staff: Staff[]; canW
         {canWrite && (
           <div className="flex gap-2 flex-wrap">
             <button className="btn" onClick={props.onAdd}>+ Hizmet ekle</button>
+            {v.status !== "completed" && <a className="btn ghost" href={`/panel/kasa?d=${props.date}`}>₺ Ödeme al</a>}
             {v.status !== "arrived" && v.status !== "completed" && <button className="btn ghost" disabled={pending} onClick={() => run(() => setVisitStatus(v.id, "arrived"))}>Geldi</button>}
             {v.status !== "completed" && <button className="btn ghost" disabled={pending} onClick={() => run(() => setVisitStatus(v.id, "completed"))}>Tamamlandı</button>}
             {v.status !== "no_show" && <button className="btn ghost" disabled={pending} onClick={() => run(() => setVisitStatus(v.id, "no_show"))}>Gelmedi</button>}
