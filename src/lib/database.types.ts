@@ -86,6 +86,9 @@ export type StaffPayout = {
   paid_at: string; created_by: string | null; created_at: string;
 };
 
+export type MessageTemplate = { kind: string; locale: string; body: string; updated_at: string };
+export type MessageLog = { id: string; customer_id: string | null; visit_id: string | null; kind: string; channel: string; body: string; sent_at: string; sent_by: string | null };
+
 export type BookingRequest = {
   id: string; first_name: string; last_name: string; phone: string; email: string; locale: string;
   service_id: string; staff_id: string | null; starts_at: string; notes: string;
@@ -124,6 +127,8 @@ export type Database = {
       sale_payments: Tbl<SalePayment, never, [R<"sale_payments_sale_id_fkey","sale_id","sales">]>;
       sale_items: Tbl<SaleItem, "visit_item_id" | "kind" | "staff_id" | "qty" | "unit_price" | "discount" | "total", [R<"sale_items_sale_id_fkey","sale_id","sales">, R<"sale_items_staff_id_fkey","staff_id","staff">, R<"sale_items_visit_item_id_fkey","visit_item_id","visit_items">]>;
       staff_payouts: Tbl<StaffPayout, "method" | "notes" | "paid_at" | "created_by", [R<"staff_payouts_staff_id_fkey","staff_id","staff">]>;
+      message_templates: { Row: MessageTemplate; Insert: { kind: string; locale: string; body: string; updated_at?: string }; Update: Partial<MessageTemplate>; Relationships: [] };
+      message_log: Tbl<MessageLog, "customer_id" | "visit_id" | "channel" | "body" | "sent_at" | "sent_by", [R<"message_log_customer_id_fkey","customer_id","customers">, R<"message_log_visit_id_fkey","visit_id","visits">]>;
       booking_requests: Tbl<BookingRequest, "last_name" | "email" | "locale" | "staff_id" | "notes" | "status" | "visit_id" | "ip_hash", [R<"booking_requests_service_id_fkey","service_id","services">, R<"booking_requests_staff_id_fkey","staff_id","staff">]>;
     };
     Views: {

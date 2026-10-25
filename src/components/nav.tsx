@@ -10,6 +10,7 @@ const items = [
   { href: "/panel/hizmetler", label: "Hizmetler", icon: "✦" },
   { href: "/panel/personel", label: "Personel", icon: "⚑" },
   { href: "/panel/online", label: "Online talepler", icon: "⇅" },
+  { href: "/panel/mesajlar", label: "Mesajlar", icon: "✉" },
   { href: "/panel/ayarlar", label: "Ayarlar", icon: "⚙" },
 ];
 
