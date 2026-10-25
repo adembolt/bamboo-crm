@@ -11,8 +11,9 @@ export const KINDS: { key: MsgKind; label: string; hint: string }[] = [
 ];
 export const VARS = ["{ad}", "{tarih}", "{saat}", "{hizmetler}", "{personel}", "{toplam}", "{salon}", "{yorum_link}", "{son_ziyaret}"];
 
-export function pickLocale(c: { locale?: string | null; phone?: string | null; nationality?: string | null }): MsgLocale {
+export function pickLocale(c: { locale?: string | null; phone?: string | null; nationality?: string | null; first_name?: string | null; last_name?: string | null }): MsgLocale {
   const l = (c.locale ?? "").toLowerCase();
+  if (!l && /[\u0400-\u04FF]/.test(`${c.first_name ?? ""}${c.last_name ?? ""}`)) return "ru"; // Kiril isim → Rusça
   if (l.startsWith("tr")) return "tr";
   if (l.startsWith("ru") || l.startsWith("uk")) return "ru";
   if (l.startsWith("en")) return "en";
