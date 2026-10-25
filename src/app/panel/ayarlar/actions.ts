@@ -6,7 +6,7 @@ import { requireManager } from "@/lib/auth";
 export async function saveSettings(formData: FormData) {
   const { supabase } = await requireManager();
   const num = (k: string, d: number) => Number(formData.get(k) ?? d) || d;
-  await supabase.from("settings").update({
+  const { error } = await supabase.from("settings").update({
     business_name: String(formData.get("business_name") ?? ""),
     tagline: String(formData.get("tagline") ?? ""),
     whatsapp_number: String(formData.get("whatsapp_number") ?? ""),
@@ -23,6 +23,7 @@ export async function saveSettings(formData: FormData) {
     online_max_days_ahead: num("online_max_days_ahead", 60),
     online_cancel_limit_minutes: num("online_cancel_limit_minutes", 240),
   }).eq("id", 1);
+  if (error) redirect(`/panel/ayarlar?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/panel", "layout");
   redirect("/panel/ayarlar?saved=1");
 }

@@ -47,6 +47,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/panel/a
           </div>
         </fieldset>
         {sp.saved && <p className="pill good">Kaydedildi</p>}
+        {typeof sp.error === "string" && <p className="pill bad">Kaydedilemedi: {sp.error}</p>}
+        {!canManage && <p className="pill warn">Bu hesabın rolü ayar değiştirmeye izin vermiyor ({profile?.role ?? "rol yok"}).</p>}
         {canManage && <button className="btn justify-self-end">Kaydet</button>}
       </form>
     </div>

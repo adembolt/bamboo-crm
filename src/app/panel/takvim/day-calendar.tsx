@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Staff, VisitStatus } from "@/lib/database.types";
 import type { DayItem } from "@/lib/queries/calendar";
@@ -33,6 +33,20 @@ export function DayCalendar(props: {
   const closeMin = toMin(settings.close_time);
   const totalMin = closeMin - openMin;
   const [selectedVisit, setSelectedVisit] = useState<string | null>(null);
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [hiddenLoaded, setHiddenLoaded] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      try { const raw = localStorage.getItem("bamboo-cal-hidden-staff"); if (raw) setHidden(new Set(JSON.parse(raw))); } catch {}
+      setHiddenLoaded(true);
+    }, 0);
+    return () => clearTimeout(id);
+  }, []);
+  function persistHidden(next: Set<string>) {
+    setHidden(next);
+    try { localStorage.setItem("bamboo-cal-hidden-staff", JSON.stringify([...next])); } catch {}
+  }
+  function toggleStaff(id: string) { const n = new Set(hidden); if (n.has(id)) n.delete(id); else n.add(id); persistHidden(n); }
   const [draft, setDraft] = useState<{ staffId: string | null; startHHMM: string; visitId?: string; customer?: PickedCustomer } | null>(null);
 
   const byStaff = useMemo(() => {
@@ -61,13 +75,35 @@ export function DayCalendar(props: {
     setDraft({ staffId, startHHMM: hhmm(Math.max(openMin, Math.min(snapped, closeMin - settings.slot_minutes))) });
   }
 
-  const columns: { id: string | null; name: string; title: string; color: string; items: DayItem[] }[] = staff.map((s) => ({
+  const visibleStaff = staff.filter((s) => !hidden.has(s.id));
+  const columns: { id: string | null; name: string; title: string; color: string; items: DayItem[] }[] = visibleStaff.map((s) => ({
     id: s.id, name: s.full_name, title: s.title, color: s.color, items: byStaff.m.get(s.id) ?? [],
   }));
+  const hiddenWithItems = staff.filter((s) => hidden.has(s.id) && (byStaff.m.get(s.id)?.length ?? 0) > 0);
   if (byStaff.unassigned.length) columns.push({ id: null, name: "Atanmamış", title: "", color: "#9aa69c", items: byStaff.unassigned });
 
   return (
     <div className="panel p-0 overflow-hidden">
+      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-line bg-surface" aria-label="Takvimde görünen personel">
+        <span className="eyebrow mr-1">Göster</span>
+        {staff.map((s) => {
+          const on = !hidden.has(s.id);
+          const n = byStaff.m.get(s.id)?.length ?? 0;
+          return (
+            <button key={s.id} type="button" onClick={() => toggleStaff(s.id)} aria-pressed={on}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition ${on ? "bg-surface border-line text-ink" : "bg-sunk border-transparent text-muted line-through"}`}
+              title={on ? "Gizle" : "Göster"}>
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: on ? s.color : "var(--line)" }} />
+              {s.full_name.split(" ")[0]}{n > 0 && <span className="num opacity-70">·{n}</span>}
+            </button>
+          );
+        })}
+        <span className="ml-auto flex gap-1">
+          {hidden.size > 0 && <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set())}>Tümünü göster</button>}
+          <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set(staff.filter((s) => !(byStaff.m.get(s.id)?.length)).map((s) => s.id)))}>Sadece randevusu olanlar</button>
+        </span>
+        {hiddenLoaded && hiddenWithItems.length > 0 && <span className="w-full text-[11px] text-warn">Gizli ama bugün randevusu olan: {hiddenWithItems.map((s) => s.full_name).join(", ")}</span>}
+      </div>
       <div className="overflow-x-auto">
         <div className="min-w-[720px]" style={{ display: "grid", gridTemplateColumns: `56px repeat(${columns.length}, minmax(160px, 1fr))` }}>
           {/* başlıklar */}
