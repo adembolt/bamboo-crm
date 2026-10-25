@@ -28,7 +28,7 @@ export default async function BookingPage({ searchParams }: PageProps<"/randevu"
   const wa = settings?.whatsapp_number?.replace(/\D/g, "") ?? "";
 
   return (
-    <main className="flex-1 px-4 py-6 md:py-10">
+    <main className="flex-1 px-4 py-6 md:py-10" lang={lang}>
       <div className="max-w-2xl mx-auto grid gap-5">
         <header className="flex items-center gap-3">
           <BambooLogo size={52} />
