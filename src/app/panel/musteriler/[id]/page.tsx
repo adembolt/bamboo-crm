@@ -4,7 +4,7 @@ import { requireSession } from "@/lib/auth";
 import { fullName, initials, fmtDate, fmtTime, money } from "@/lib/format";
 import { CustomerEditForm } from "./edit-form";
 import type { Customer } from "@/lib/database.types";
-import { PackagePanel } from "./package-sale";
+import { PackagePanel, BalancePanel } from "./package-sale";
 
 export default async function CustomerPage({ params }: PageProps<"/panel/musteriler/[id]">) {
   const { id } = await params;
@@ -12,7 +12,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
   const canWrite = !!profile && ["owner", "manager", "reception"].includes(profile.role);
   const isManager = !!profile && ["owner", "manager"].includes(profile.role);
 
-  const [{ data: c }, { data: visits }, { data: packages }, { data: services }, { data: staff }, { data: settings }, { data: ledger }] = await Promise.all([
+  const [{ data: c }, { data: visits }, { data: packages }, { data: services }, { data: staff }, { data: settings }, { data: ledger }, { data: bledger }] = await Promise.all([
     supabase.from("customers").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("visits")
@@ -25,6 +25,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
     supabase.from("staff").select("id, full_name").eq("is_active", true).order("sort_order"),
     supabase.from("settings").select("package_default_months, loyalty_earn_percent").eq("id", 1).single(),
     supabase.from("loyalty_ledger").select("points, reason, created_at").eq("customer_id", id).order("created_at", { ascending: false }).limit(8),
+    supabase.from("balance_ledger").select("amount, reason, created_at").eq("customer_id", id).order("created_at", { ascending: false }).limit(8),
   ]);
   if (!c) notFound();
   const customer = c as Customer;
@@ -67,6 +68,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
         </section>
 
         <div className="grid gap-4">
+          <BalancePanel customerId={id} balance={Number(customer.balance)} canWrite={canWrite} isManager={isManager} ledger={(bledger ?? []).map((l) => ({ ...l, amount: Number(l.amount) }))} />
           <PackagePanel customerId={id} packages={(packages ?? []).map((p) => ({ ...p, price_paid: Number(p.price_paid) }))} services={(services ?? []).map((s) => ({ ...s, price: Number(s.price) }))} staff={staff ?? []} defaultMonths={settings?.package_default_months ?? 6} canWrite={canWrite} isManager={isManager} points={customer.loyalty_points} />
           {ledger && ledger.length > 0 && (
             <section className="panel grid gap-1">

@@ -2,13 +2,65 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/app/panel/takvim/day-calendar";
-import { sellPackage, adjustPackage, adjustPoints } from "@/app/panel/kasa/actions";
+import { sellPackage, adjustPackage, adjustPoints, topUpBalance, adjustBalance } from "@/app/panel/kasa/actions";
 import { money, todayIso, addDays } from "@/lib/format";
 import type { PayMethod } from "@/lib/database.types";
 
 type Svc = { id: string; name_tr: string; price: number; session_count: number; kind: string };
 type Pkg = { id: string; name: string; total_sessions: number; used_sessions: number; price_paid: number; purchased_at: string; expires_at: string | null; is_active: boolean };
 const METHOD: Partial<Record<PayMethod, string>> = { cash: "Nakit", card: "Kart", transfer: "Havale", online: "Online", gift_card: "Hediye çeki" };
+
+export function BalancePanel({ customerId, balance, canWrite, isManager, ledger }: { customerId: string; balance: number; canWrite: boolean; isManager: boolean; ledger: { amount: number; reason: string; created_at: string }[] }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [adj, setAdj] = useState(false);
+  const [pending, start] = useTransition();
+  const [err, setErr] = useState("");
+  const [amount, setAmount] = useState("");
+  const [pays, setPays] = useState<{ method: PayMethod; amount: string }[]>([{ method: "cash", amount: "" }]);
+  const [delta, setDelta] = useState(""); const [reason, setReason] = useState("");
+  const total = Number(amount) || 0; const paid = pays.reduce((s, p) => s + (Number(p.amount) || 0), 0); const remaining = total - paid;
+  const setPay = (i: number, patch: Partial<{ method: PayMethod; amount: string }>) => setPays(pays.map((p, k) => (k === i ? { ...p, ...patch } : p)));
+  return (
+    <section className="panel grid gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <h2 className="text-lg font-bold">Bakiye (balans)</h2>
+        <b className={`num text-xl ml-auto ${balance < 0 ? "text-bad" : "text-green"}`}>{money(balance)}</b>
+        {isManager && <button className="btn ghost sm" onClick={() => setAdj(true)}>Düzelt</button>}
+        {canWrite && <button className="btn sm" onClick={() => setOpen(true)}>Bakiye yükle</button>}
+      </div>
+      <p className="text-xs text-muted">Müşterinin önceden yatırdığı para. Kasada “Ödeme al” ekranında <b>Bakiye</b> seçeneğiyle düşülür.</p>
+      {ledger.length > 0 && <div className="grid gap-0.5">{ledger.map((l, i) => <div key={i} className="text-sm grid grid-cols-[auto_1fr_auto] gap-2"><span className="num text-muted">{l.created_at.slice(0, 10).split("-").reverse().join(".")}</span><span className="truncate">{l.reason}</span><span className={`num font-semibold ${l.amount > 0 ? "text-good" : "text-bad"}`}>{l.amount > 0 ? "+" : ""}{money(l.amount)}</span></div>)}</div>}
+      {open && (
+        <Modal title="Bakiye yükle" onClose={() => setOpen(false)}>
+          <div className="grid gap-3">
+            <label className="f">Yüklenecek tutar<span className="inp"><input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="ör. 5000" /></span></label>
+            <div className="eyebrow">Ödeme</div>
+            {pays.map((p, i) => (
+              <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                <span className="inp"><select value={p.method} onChange={(e) => setPay(i, { method: e.target.value as PayMethod })}>{(["cash", "card", "transfer", "online"] as PayMethod[]).map((m) => <option key={m} value={m}>{METHOD[m]}</option>)}</select></span>
+                <span className="inp"><input inputMode="decimal" placeholder={String(Math.max(0, remaining + (Number(p.amount) || 0)))} value={p.amount} onChange={(e) => setPay(i, { amount: e.target.value })} /></span>
+                <button type="button" className="btn ghost sm" onClick={() => setPay(i, { amount: String(Math.max(0, remaining + (Number(p.amount) || 0))) })}>↵</button>
+              </div>
+            ))}
+            <div className="flex gap-2 items-center"><button type="button" className="btn ghost sm" onClick={() => setPays([...pays, { method: "card", amount: "" }])}>+ Karışık ödeme</button><span className={`ml-auto text-sm num ${Math.abs(remaining) < 0.5 ? "text-good" : "text-bad"}`}>{Math.abs(remaining) < 0.5 ? "Tutar eşleşti" : `Kalan ${money(remaining)}`}</span></div>
+            {err && <p className="pill bad">{err}</p>}
+            <div className="flex justify-end gap-2"><button className="btn ghost" onClick={() => setOpen(false)}>Vazgeç</button><button className="btn" disabled={pending || !(total > 0) || Math.abs(remaining) >= 0.5} onClick={() => { setErr(""); start(async () => { const r = await topUpBalance({ customerId, amount: total, saleDate: todayIso(), payments: pays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0 })) }); if (!r.ok) setErr(r.error); else { setOpen(false); setAmount(""); router.refresh(); } }); }}>{pending ? "…" : "Yükle ve kasaya işle"}</button></div>
+          </div>
+        </Modal>
+      )}
+      {adj && (
+        <Modal title={`Bakiye düzelt (mevcut ${money(balance)})`} onClose={() => setAdj(false)}>
+          <div className="grid gap-3">
+            <label className="f">Tutar (+ ekle / − düş)<span className="inp"><input inputMode="decimal" value={delta} onChange={(e) => setDelta(e.target.value)} placeholder="ör. 500 veya -200" /></span></label>
+            <label className="f">Açıklama<span className="inp"><input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="ör. DIKIDI'den devreden bakiye" /></span></label>
+            <div className="flex justify-end gap-2"><button className="btn ghost" onClick={() => setAdj(false)}>Vazgeç</button><button className="btn" disabled={pending || !Number(delta)} onClick={() => start(async () => { await adjustBalance(customerId, Number(delta), reason); setAdj(false); router.refresh(); })}>Kaydet</button></div>
+          </div>
+        </Modal>
+      )}
+    </section>
+  );
+}
 
 export function PackagePanel({ customerId, packages, services, staff, defaultMonths, canWrite, isManager, points }: { customerId: string; packages: Pkg[]; services: Svc[]; staff: { id: string; full_name: string }[]; defaultMonths: number; canWrite: boolean; isManager: boolean; points: number }) {
   const router = useRouter();

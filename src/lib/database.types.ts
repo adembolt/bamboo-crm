@@ -4,7 +4,7 @@
 export type AppRole = "owner" | "manager" | "reception" | "staff";
 export type VisitStatus = "pending" | "confirmed" | "arrived" | "completed" | "no_show" | "cancelled";
 export type VisitSource = "salon" | "phone" | "whatsapp" | "online" | "instagram" | "dikidi" | "walk_in";
-export type PayMethod = "cash" | "card" | "transfer" | "online" | "package" | "gift_card" | "points" | "other";
+export type PayMethod = "cash" | "card" | "transfer" | "online" | "package" | "gift_card" | "points" | "balance" | "other";
 
 type Timestamps = { created_at: string; updated_at: string };
 
@@ -78,7 +78,7 @@ export type Sale = {
 };
 export type SalePayment = { id: string; sale_id: string; method: PayMethod; amount: number; ref: string };
 export type SaleItem = {
-  id: string; sale_id: string; visit_item_id: string | null; kind: "service" | "product" | "package" | "gift_card"; name: string; staff_id: string | null;
+  id: string; sale_id: string; visit_item_id: string | null; kind: "service" | "product" | "package" | "gift_card" | "balance"; name: string; staff_id: string | null;
   qty: number; unit_price: number; discount: number; total: number;
 };
 export type StaffPayout = {
@@ -88,6 +88,7 @@ export type StaffPayout = {
 
 export type GiftCard = { id: string; code: string; initial_amount: number; balance: number; buyer_name: string; customer_id: string | null; sale_id: string | null; expires_at: string | null; notes: string; created_by: string | null; created_at: string };
 export type GiftCardUse = { id: string; gift_card_id: string; sale_id: string | null; amount: number; created_at: string };
+export type BalanceLedger = { id: string; customer_id: string; amount: number; reason: string; sale_id: string | null; created_by: string | null; created_at: string };
 export type LoyaltyLedger = { id: string; customer_id: string; points: number; reason: string; sale_id: string | null; created_at: string };
 export type MessageTemplate = { kind: string; locale: string; body: string; updated_at: string };
 export type MessageLog = { id: string; customer_id: string | null; visit_id: string | null; kind: string; channel: string; body: string; sent_at: string; sent_by: string | null };
@@ -132,6 +133,7 @@ export type Database = {
       staff_payouts: Tbl<StaffPayout, "method" | "notes" | "paid_at" | "created_by", [R<"staff_payouts_staff_id_fkey","staff_id","staff">]>;
       gift_cards: Tbl<GiftCard, "buyer_name" | "customer_id" | "sale_id" | "expires_at" | "notes" | "created_by", [R<"gift_cards_customer_id_fkey","customer_id","customers">, R<"gift_cards_sale_id_fkey","sale_id","sales">]>;
       gift_card_uses: Tbl<GiftCardUse, "sale_id", [R<"gift_card_uses_gift_card_id_fkey","gift_card_id","gift_cards">]>;
+      balance_ledger: Tbl<BalanceLedger, "reason" | "sale_id" | "created_by", [R<"balance_ledger_customer_id_fkey","customer_id","customers">]>;
       loyalty_ledger: Tbl<LoyaltyLedger, "reason" | "sale_id", [R<"loyalty_ledger_customer_id_fkey","customer_id","customers">]>;
       message_templates: { Row: MessageTemplate; Insert: { kind: string; locale: string; body: string; updated_at?: string }; Update: Partial<MessageTemplate>; Relationships: [] };
       message_log: Tbl<MessageLog, "customer_id" | "visit_id" | "channel" | "body" | "sent_at" | "sent_by", [R<"message_log_customer_id_fkey","customer_id","customers">, R<"message_log_visit_id_fkey","visit_id","visits">]>;

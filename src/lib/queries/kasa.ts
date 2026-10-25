@@ -4,7 +4,7 @@ import type { Database, PayMethod, Staff } from "@/lib/database.types";
 
 export type DayVisit = {
   id: string; visit_date: string; status: string; discount_percent: number; notes: string;
-  customer: { id: string; first_name: string; last_name: string; phone: string; loyalty_points: number } | null;
+  customer: { id: string; first_name: string; last_name: string; phone: string; loyalty_points: number; balance: number } | null;
   items: { id: string; service_id: string | null; service_name: string; staff_id: string | null; starts_at: string; price: number; discount: number; status: string; package_id: string | null }[];
   packages?: { id: string; name: string; service_id: string | null; total_sessions: number; used_sessions: number; expires_at: string | null }[];
   sale: { id: string; total: number; discount: number; payments: { method: PayMethod; amount: number }[] } | null;
@@ -15,7 +15,7 @@ export async function loadKasaDay(supabase: SupabaseClient<Database>, isoDate: s
   const [visitsRes, expRes, staffRes, settingsRes, otherRes] = await Promise.all([
     supabase
       .from("visits")
-      .select("id, visit_date, status, discount_percent, notes, customer:customers(id, first_name, last_name, phone, loyalty_points), items:visit_items(id, service_id, service_name, staff_id, starts_at, price, discount, status, package_id), sale:sales(id, total, discount, payments:sale_payments(method, amount))")
+      .select("id, visit_date, status, discount_percent, notes, customer:customers(id, first_name, last_name, phone, loyalty_points, balance), items:visit_items(id, service_id, service_name, staff_id, starts_at, price, discount, status, package_id), sale:sales(id, total, discount, payments:sale_payments(method, amount))")
       .eq("visit_date", isoDate)
       .neq("status", "cancelled")
       .order("created_at"),
@@ -47,7 +47,7 @@ export function summarize(visits: DayVisit[], expenses: { amount: number; method
   }
   for (const o of otherSales) { gross += Number(o.total); for (const p of o.payments) byMethod[p.method] = (byMethod[p.method] ?? 0) + Number(p.amount); }
   // Hediye çeki ve puanla ödenen kısım gerçek tahsilat değil (çek satışında zaten sayıldı)
-  gross -= (byMethod.gift_card ?? 0) + (byMethod.points ?? 0);
+  gross -= (byMethod.gift_card ?? 0) + (byMethod.points ?? 0) + (byMethod.balance ?? 0);
   const expected = visits.filter((v) => !v.sale).reduce((s, v) => s + v.items.filter((i) => i.status !== "cancelled").reduce((a, i) => a + Number(i.price) - Number(i.discount), 0) * (1 - Number(v.discount_percent) / 100), 0);
   const exp = expenses.reduce((s, e) => s + Number(e.amount), 0);
   const net = gross / (1 + kdv);
@@ -65,7 +65,7 @@ export async function staffEarnings(supabase: SupabaseClient<Database>, from: st
   for (const r of data ?? []) {
     if (!r.staff_id) continue;
     const m = map.get(r.staff_id) ?? { service: 0, product: 0 };
-    if (r.kind === "product") m.product += Number(r.total); else m.service += Number(r.total);
+    if (r.kind === "product") m.product += Number(r.total); else if (r.kind === "service" || r.kind === "package") m.service += Number(r.total);
     map.set(r.staff_id, m);
   }
   return map;

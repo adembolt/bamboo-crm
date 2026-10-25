@@ -7,7 +7,7 @@ import { money, fmtTime, fullName } from "@/lib/format";
 import { closeVisit, voidSale, addExpense, deleteExpense } from "./actions";
 import { Modal } from "@/app/panel/takvim/day-calendar";
 
-const METHOD: Record<PayMethod, string> = { cash: "Nakit", card: "Kart", transfer: "Havale", online: "Online", gift_card: "Hediye çeki", points: "Puan", package: "Paket", other: "Diğer" };
+const METHOD: Record<PayMethod, string> = { cash: "Nakit", card: "Kart", transfer: "Havale", online: "Online", balance: "Bakiye", gift_card: "Hediye çeki", points: "Puan", package: "Paket", other: "Diğer" };
 const CATS = ["malzeme", "kira", "fatura", "maaş", "avans", "prim", "pazarlama", "temizlik", "yemek", "diğer"];
 
 type Expense = { id: string; category: string; description: string; amount: number; method: PayMethod; staff_id: string | null; staff_name: string | null };
@@ -135,6 +135,14 @@ function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; staffName
   const total = Math.round(subtotal * (1 - (Number(disc) || 0) / 100));
   const [pays, setPays] = useState<{ method: PayMethod; amount: string; ref?: string }[]>([{ method: "cash", amount: "" }]);
   const points = v.customer?.loyalty_points ?? 0;
+  const balance = Number(v.customer?.balance ?? 0);
+  // Bir paketi, eşleşen tüm kalemlere uygula (ödeme bölümünden)
+  function applyPackage(pid: string) {
+    const p = pkgs.find((x) => x.id === pid); if (!p) return;
+    const n = { ...pkgUse }; let left = p.total_sessions - p.used_sessions - Object.values(n).filter((x) => x === pid).length;
+    for (const i of items) { if (n[i.id] || left <= 0) continue; if (!p.service_id || p.service_id === i.service_id) { n[i.id] = pid; left--; } }
+    setPkgUse(n);
+  }
   const paid = pays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const remaining = total - paid;
 
@@ -178,9 +186,16 @@ function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; staffName
         </div>
         <div className="grid gap-2">
           <div className="eyebrow">Ödeme</div>
+          {(balance > 0 || pkgs.length > 0 || points > 0) && (
+            <div className="flex flex-wrap gap-1.5 text-xs">
+              {balance > 0 && <button type="button" className="pill gold hover:brightness-95" onClick={() => { const i = pays.findIndex((x) => x.method === "balance"); const amt = String(Math.min(balance, Math.max(0, remaining + (i >= 0 ? Number(pays[i].amount) || 0 : 0)))); if (i >= 0) setPay(i, { amount: amt }); else setPays([{ method: "balance", amount: amt }, ...pays.filter((x) => x.amount)]); }}>Bakiye {money(balance)} → kullan</button>}
+              {pkgs.map((p) => { const used = Object.values(pkgUse).filter((x) => x === p.id).length; const left = p.total_sessions - p.used_sessions - used; return <button key={p.id} type="button" className={`pill ${used ? "good" : ""} hover:brightness-95`} disabled={left <= 0 && !used} onClick={() => used ? setPkgUse(Object.fromEntries(Object.entries(pkgUse).filter(([, x]) => x !== p.id))) : applyPackage(p.id)}>Paket: {p.name} · kalan {left}{used ? ` · ${used} kalem düşüldü ✓` : " → düş"}</button>; })}
+              {points > 0 && <span className="pill">{points} puan</span>}
+            </div>
+          )}
           {pays.map((p, i) => (
             <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-              <span className="inp"><select value={p.method} onChange={(e) => setPay(i, { method: e.target.value as PayMethod })}>{(Object.keys(METHOD) as PayMethod[]).filter((m) => m !== "package").map((m) => <option key={m} value={m}>{METHOD[m]}{m === "points" ? ` (${points})` : ""}</option>)}</select></span>
+              <span className="inp"><select value={p.method} onChange={(e) => setPay(i, { method: e.target.value as PayMethod })}>{(Object.keys(METHOD) as PayMethod[]).filter((m) => m !== "package").map((m) => <option key={m} value={m}>{METHOD[m]}{m === "points" ? ` (${points})` : m === "balance" ? ` (${money(balance)})` : ""}</option>)}</select></span>
               <span className="inp"><input inputMode="decimal" placeholder={String(Math.max(0, remaining + (Number(p.amount) || 0)))} value={p.amount} onChange={(e) => setPay(i, { amount: e.target.value })} /></span>
               <button type="button" className="btn ghost sm" onClick={() => fillRemaining(i)} title="Kalanı doldur">↵</button>
               {p.method === "gift_card" && <span className="inp col-span-3"><input placeholder="Hediye çeki kodu (BB-XXXX-XXXX)" value={p.ref ?? ""} onChange={(e) => setPay(i, { ref: e.target.value.toUpperCase() })} /></span>}

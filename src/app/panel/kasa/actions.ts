@@ -49,6 +49,10 @@ export async function closeVisit(input: CloseVisitInput) {
   const pointPays = input.payments.filter((p) => p.method === "points" && Number(p.amount) > 0).reduce((s, p) => s + Number(p.amount), 0);
   let customerPoints = 0;
   if (visit.customer_id) { const { data: cu } = await supabase.from("customers").select("loyalty_points").eq("id", visit.customer_id).single(); customerPoints = cu?.loyalty_points ?? 0; }
+  const balancePay = input.payments.filter((p) => p.method === "balance" && Number(p.amount) > 0).reduce((s, p) => s + Number(p.amount), 0);
+  let customerBalance = 0;
+  if (visit.customer_id) { const { data: cb } = await supabase.from("customers").select("balance").eq("id", visit.customer_id).single(); customerBalance = Number(cb?.balance ?? 0); }
+  if (balancePay > 0 && (!visit.customer_id || customerBalance + 0.001 < balancePay)) return { ok: false as const, error: `Bakiye yetersiz (mevcut ${customerBalance}).` };
   const pointValue = Number(settings?.loyalty_point_value ?? 1) || 1;
   const pointsNeeded = Math.ceil(pointPays / pointValue);
   if (pointPays > 0 && (!visit.customer_id || customerPoints < pointsNeeded)) return { ok: false as const, error: `Yeterli puan yok (mevcut ${customerPoints}, gereken ${pointsNeeded}).` };
@@ -84,9 +88,14 @@ export async function closeVisit(input: CloseVisitInput) {
     await supabase.from("gift_cards").update({ balance: Number(c.balance) - Number(p.amount) }).eq("id", c.id);
     await supabase.from("gift_card_uses").insert({ gift_card_id: c.id, sale_id: sale.id, amount: Number(p.amount) });
   }
-  // Sadakat puanı: kullanım ve kazanım (hediye çeki/paket/puan dışı ödemeler üzerinden)
+  // Bakiye (balans) düşümü
+  if (balancePay > 0 && visit.customer_id) {
+    await supabase.from("customers").update({ balance: Math.round((customerBalance - balancePay) * 100) / 100 }).eq("id", visit.customer_id);
+    await supabase.from("balance_ledger").insert({ customer_id: visit.customer_id, amount: -balancePay, reason: "Ziyaret ödemesi", sale_id: sale.id, created_by: user.id });
+  }
+  // Sadakat puanı: kullanım ve kazanım (hediye çeki/paket/puan/bakiye dışı ödemeler üzerinden)
   if (visit.customer_id) {
-    const earnBase = pays.filter((p) => !["gift_card", "points", "package"].includes(p.method)).reduce((s, p) => s + p.amount, 0);
+    const earnBase = pays.filter((p) => !["gift_card", "points", "package", "balance"].includes(p.method)).reduce((s, p) => s + p.amount, 0);
     const earned = Math.floor(earnBase * Number(settings?.loyalty_earn_percent ?? 0) / 100);
     const delta = earned - pointsNeeded;
     if (pointsNeeded) await supabase.from("loyalty_ledger").insert({ customer_id: visit.customer_id, points: -pointsNeeded, reason: "Ödemede kullanıldı", sale_id: sale.id });
@@ -114,6 +123,9 @@ export async function voidSale(saleId: string) {
   }
   const { data: uses } = await supabase.from("gift_card_uses").select("gift_card_id, amount").eq("sale_id", saleId);
   for (const u of uses ?? []) { const { data: c } = await supabase.from("gift_cards").select("balance").eq("id", u.gift_card_id).single(); if (c) await supabase.from("gift_cards").update({ balance: Number(c.balance) + Number(u.amount) }).eq("id", u.gift_card_id); }
+  const { data: bl } = await supabase.from("balance_ledger").select("amount").eq("sale_id", saleId);
+  const bback = (bl ?? []).reduce((s, l) => s + Number(l.amount), 0);
+  if (bback && sale?.customer_id) { const { data: cb } = await supabase.from("customers").select("balance").eq("id", sale.customer_id).single(); await supabase.from("customers").update({ balance: Number(cb?.balance ?? 0) - bback }).eq("id", sale.customer_id); }
   const { data: led } = await supabase.from("loyalty_ledger").select("points").eq("sale_id", saleId);
   const back = (led ?? []).reduce((s, l) => s + l.points, 0);
   if (back && sale?.customer_id) { const { data: cu } = await supabase.from("customers").select("loyalty_points").eq("id", sale.customer_id).single(); await supabase.from("customers").update({ loyalty_points: (cu?.loyalty_points ?? 0) - back }).eq("id", sale.customer_id); }
@@ -222,6 +234,33 @@ export async function adjustPoints(customerId: string, points: number, reason: s
   const { data: cu } = await supabase.from("customers").select("loyalty_points").eq("id", customerId).single();
   await supabase.from("loyalty_ledger").insert({ customer_id: customerId, points, reason: reason || "Elle düzeltme" });
   await supabase.from("customers").update({ loyalty_points: (cu?.loyalty_points ?? 0) + points }).eq("id", customerId);
+  revalidatePath(`/panel/musteriler/${customerId}`);
+  return { ok: true as const };
+}
+
+/** Bakiye (balans) yükleme: kasa satışı + müşteri bakiyesi */
+export async function topUpBalance(input: { customerId: string; amount: number; saleDate: string; payments: { method: PayMethod; amount: number; ref?: string }[]; notes?: string }) {
+  const { supabase, user } = await requireOps();
+  if (!(input.amount > 0)) return { ok: false as const, error: "Tutar gerekli." };
+  const paid = input.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  if (Math.abs(paid - input.amount) > 0.5) return { ok: false as const, error: `Ödeme toplamı (${paid}) tutarla (${input.amount}) eşleşmiyor.` };
+  if (input.payments.some((p) => ["balance", "points", "package"].includes(p.method))) return { ok: false as const, error: "Bakiye yüklemesi nakit/kart/havale ile yapılır." };
+  const { data: sale, error } = await supabase.from("sales").insert({ customer_id: input.customerId, sale_date: input.saleDate, subtotal: input.amount, discount: 0, total: input.amount, notes: input.notes ?? "Bakiye yükleme", created_by: user.id }).select("id").single();
+  if (error || !sale) return { ok: false as const, error: error?.message ?? "Satış oluşturulamadı" };
+  await supabase.from("sale_items").insert({ sale_id: sale.id, kind: "balance", name: "Bakiye yükleme", staff_id: null, qty: 1, unit_price: input.amount, discount: 0, total: input.amount });
+  await supabase.from("sale_payments").insert(input.payments.filter((p) => Number(p.amount) > 0).map((p) => ({ sale_id: sale.id, method: p.method, amount: Number(p.amount), ref: String(p.ref ?? "").toUpperCase() })));
+  const { data: cb } = await supabase.from("customers").select("balance").eq("id", input.customerId).single();
+  await supabase.from("customers").update({ balance: Number(cb?.balance ?? 0) + input.amount }).eq("id", input.customerId);
+  await supabase.from("balance_ledger").insert({ customer_id: input.customerId, amount: input.amount, reason: input.notes || "Bakiye yükleme", sale_id: sale.id, created_by: user.id });
+  revalidatePath("/panel/kasa"); revalidatePath(`/panel/musteriler/${input.customerId}`);
+  return { ok: true as const };
+}
+
+export async function adjustBalance(customerId: string, amount: number, reason: string) {
+  const { supabase, user } = await requireManager();
+  const { data: cb } = await supabase.from("customers").select("balance").eq("id", customerId).single();
+  await supabase.from("customers").update({ balance: Number(cb?.balance ?? 0) + amount }).eq("id", customerId);
+  await supabase.from("balance_ledger").insert({ customer_id: customerId, amount, reason: reason || "Elle düzeltme", created_by: user.id });
   revalidatePath(`/panel/musteriler/${customerId}`);
   return { ok: true as const };
 }
