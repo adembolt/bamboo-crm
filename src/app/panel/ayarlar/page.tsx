@@ -13,6 +13,13 @@ export default async function SettingsPage({ searchParams }: PageProps<"/panel/a
   return (
     <div className="grid gap-4 max-w-2xl">
       <header><h1 className="text-xl font-bold">Ayarlar</h1><p className="text-sm text-muted">İşletme bilgileri, çalışma saatleri ve online randevu kuralları</p></header>
+      <div className="panel grid gap-1">
+        <div className="eyebrow">Online randevu sayfası</div>
+        <div className="flex flex-wrap gap-2 items-center">
+          {(["tr", "en", "ru"] as const).map((l) => <a key={l} className="btn ghost sm" href={`/randevu?lang=${l}`} target="_blank" rel="noreferrer">/randevu · {l.toUpperCase()}</a>)}
+        </div>
+        <p className="text-xs text-muted">Sadece Hizmetler sekmesinde “Online” açık olan hizmetler görünür. Bu linki Instagram bio, Google profili ve WhatsApp mesajlarına koyabilirsin.</p>
+      </div>
       <form action={saveSettings} className="panel grid gap-4">
         <fieldset disabled={!canManage} className="grid gap-4">
           <div className="grid sm:grid-cols-2 gap-3">
