@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const { data: st } = await db.from("settings").select("import_token").eq("id", 1).single();
   if (!st?.import_token || token.length < 16 || token !== st.import_token) return json({ error: "unauthorized" }, 401);
 
-  let body: { ref?: string; rows?: Row[]; dryRun?: boolean };
+  let body: { ref?: string; rows?: Row[]; dryRun?: boolean; reset?: boolean };
   try { body = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
   const ref = String(body.ref ?? "dikidi-journal").slice(0, 60);
   const rows = Array.isArray(body.rows) ? body.rows : [];
@@ -46,8 +46,8 @@ export async function POST(req: NextRequest) {
   const today = todayIso();
   const report = { rows: rows.length, skipped: 0, visits: 0, items: 0, newCustomers: 0, unmatchedServices: new Map<string, number>(), unmatchedStaff: new Set<string>(), overlapDropped: 0, errors: [] as string[] };
 
-  if (!body.dryRun) {
-    // Önceki aktarımı temizle (satışa bağlanmamış olanlar)
+  if (!body.dryRun && body.reset) {
+    // Önceki aktarımı temizle (satışa bağlanmamış olanlar); reset verilmezse mevcut aktarım atlanır (kaldığı yerden devam)
     const { data: old } = await db.from("visits").select("id, sale:sales(id)").eq("import_ref", ref);
     const ids = (old ?? []).filter((v) => !(Array.isArray(v.sale) ? v.sale.length : v.sale)).map((v) => v.id);
     for (let i = 0; i < ids.length; i += 200) await db.from("visits").delete().in("id", ids.slice(i, i + 200));
@@ -113,7 +113,8 @@ export async function POST(req: NextRequest) {
     // Aynı müşteri+gün için mevcut (aktarım dışı) ziyaret varsa ona ekle
     let visitId: string | null = null;
     if (customerId) {
-      const { data: ex } = await db.from("visits").select("id").eq("customer_id", customerId).eq("visit_date", first.isoDate).neq("status", "cancelled").maybeSingle();
+      const { data: ex } = await db.from("visits").select("id, import_ref").eq("customer_id", customerId).eq("visit_date", first.isoDate).neq("status", "cancelled").maybeSingle();
+      if (ex?.import_ref === ref) { report.skipped++; continue; } // daha önce aktarılmış
       visitId = ex?.id ?? null;
     }
     if (!visitId) {
