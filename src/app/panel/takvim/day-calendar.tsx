@@ -103,16 +103,16 @@ export function DayCalendar(props: {
         </span>
         {hiddenLoaded && hiddenWithItems.length > 0 && <span className="w-full text-[11px] text-warn">Gizli ama bugün randevusu olan: {hiddenWithItems.map((s) => s.full_name).join(", ")}</span>}
       </div>
-      <div className="overflow-x-auto">
-        <div className="min-w-[720px]" style={{ display: "grid", gridTemplateColumns: `56px repeat(${columns.length}, minmax(160px, 1fr))` }}>
+      <div className="overflow-x-auto lg:overflow-x-visible">
+        <div className="min-w-[640px] lg:min-w-0" style={{ display: "grid", gridTemplateColumns: `46px repeat(${columns.length}, minmax(0, 1fr))` }}>
           {/* başlıklar */}
           <div className="sticky top-0 z-10 bg-surface border-b border-line" />
           {columns.map((c) => (
-            <div key={c.id ?? "none"} className="sticky top-0 z-10 bg-surface border-b border-l border-line px-3 py-2">
-              <div className="flex items-center gap-2">
+            <div key={c.id ?? "none"} className="sticky top-0 z-10 bg-surface border-b border-l border-line px-2 py-2 min-w-0" title={c.name}>
+              <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full flex-none" style={{ background: c.color }} />
                 <div className="min-w-0">
-                  <div className="font-semibold truncate">{c.name}</div>
+                  <div className="font-semibold truncate text-sm">{c.name}</div>
                   <div className="text-[11px] text-muted truncate">{c.title || `${c.items.length} randevu`}</div>
                 </div>
               </div>

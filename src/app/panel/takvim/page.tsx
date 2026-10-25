@@ -33,7 +33,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           <span className="inp"><input type="date" name="d" defaultValue={d} /></span>
         </form>
       </header>
-      <div className="grid xl:grid-cols-[1fr_260px] gap-4 items-start">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_240px] gap-3 items-start">
         <DayCalendar
           date={d}
           staff={day.staff}
@@ -44,7 +44,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           categories={picker.categories}
           canWrite={canWrite}
         />
-        <aside className="grid gap-4 xl:sticky xl:top-4">
+        <aside className="grid gap-3 lg:sticky lg:top-3 min-w-0">
           <MiniCalendar date={d} busyDays={busyDays} />
           <KasaSnapshot date={d} gross={sum.gross} byMethod={sum.byMethod} expected={sum.expected} openCount={kasa.visits.filter((v) => !v.sale).length} closedCount={kasa.visits.filter((v) => v.sale).length + kasa.otherSales.length} />
         </aside>
