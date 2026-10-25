@@ -4,7 +4,7 @@
 export type AppRole = "owner" | "manager" | "reception" | "staff";
 export type VisitStatus = "pending" | "confirmed" | "arrived" | "completed" | "no_show" | "cancelled";
 export type VisitSource = "salon" | "phone" | "whatsapp" | "online" | "instagram" | "dikidi" | "walk_in";
-export type PayMethod = "cash" | "card" | "transfer" | "online" | "package" | "gift_card" | "other";
+export type PayMethod = "cash" | "card" | "transfer" | "online" | "package" | "gift_card" | "points" | "other";
 
 type Timestamps = { created_at: string; updated_at: string };
 
@@ -17,7 +17,7 @@ export type Settings = {
   slot_minutes: number; open_time: string; close_time: string; open_days: number[];
   online_booking_enabled: boolean; online_requires_approval: boolean; online_min_notice_minutes: number;
   online_max_days_ahead: number; online_cancel_limit_minutes: number; kdv_rate: number;
-  whatsapp_number: string; instagram_url: string; google_review_url: string; import_token: string; updated_at: string;
+  whatsapp_number: string; instagram_url: string; google_review_url: string; import_token: string; loyalty_earn_percent: number; loyalty_point_value: number; package_default_months: number; updated_at: string;
 };
 
 export type ServiceCategory = {
@@ -49,7 +49,7 @@ export type Customer = {
   id: string; first_name: string; last_name: string; phone: string; email: string; gender: "" | "f" | "m" | "x";
   birth_date: string | null; locale: string; nationality: string; source: string; tags: string[];
   notes: string; health_notes: string; consent_marketing: boolean; consent_at: string | null;
-  is_blocked: boolean; no_show_count: number; discount_percent: number; balance: number; dikidi_id: string | null;
+  is_blocked: boolean; no_show_count: number; discount_percent: number; balance: number; dikidi_id: string | null; loyalty_points: number;
 } & Timestamps;
 
 export type Visit = {
@@ -65,7 +65,7 @@ export type VisitItem = {
 
 export type CustomerPackage = {
   id: string; customer_id: string; service_id: string | null; name: string; total_sessions: number;
-  used_sessions: number; price_paid: number; purchased_at: string; expires_at: string | null; notes: string; created_at: string;
+  used_sessions: number; price_paid: number; purchased_at: string; expires_at: string | null; notes: string; created_at: string; sale_id: string | null; is_active: boolean;
 };
 
 export type Expense = {
@@ -76,9 +76,9 @@ export type Sale = {
   id: string; visit_id: string | null; customer_id: string | null; sale_date: string; subtotal: number; discount: number;
   total: number; notes: string; created_by: string | null; created_at: string;
 };
-export type SalePayment = { id: string; sale_id: string; method: PayMethod; amount: number };
+export type SalePayment = { id: string; sale_id: string; method: PayMethod; amount: number; ref: string };
 export type SaleItem = {
-  id: string; sale_id: string; visit_item_id: string | null; kind: "service" | "product"; name: string; staff_id: string | null;
+  id: string; sale_id: string; visit_item_id: string | null; kind: "service" | "product" | "package" | "gift_card"; name: string; staff_id: string | null;
   qty: number; unit_price: number; discount: number; total: number;
 };
 export type StaffPayout = {
@@ -86,6 +86,9 @@ export type StaffPayout = {
   paid_at: string; created_by: string | null; created_at: string;
 };
 
+export type GiftCard = { id: string; code: string; initial_amount: number; balance: number; buyer_name: string; customer_id: string | null; sale_id: string | null; expires_at: string | null; notes: string; created_by: string | null; created_at: string };
+export type GiftCardUse = { id: string; gift_card_id: string; sale_id: string | null; amount: number; created_at: string };
+export type LoyaltyLedger = { id: string; customer_id: string; points: number; reason: string; sale_id: string | null; created_at: string };
 export type MessageTemplate = { kind: string; locale: string; body: string; updated_at: string };
 export type MessageLog = { id: string; customer_id: string | null; visit_id: string | null; kind: string; channel: string; body: string; sent_at: string; sent_by: string | null };
 
@@ -121,12 +124,15 @@ export type Database = {
       customers: Tbl<Customer, Exclude<keyof Customer, "first_name">>;
       visits: Tbl<Visit, Exclude<keyof Visit, "visit_date">, [R<"visits_customer_id_fkey","customer_id","customers">]>;
       visit_items: Tbl<VisitItem, "service_id" | "staff_id" | "resource_id" | "price" | "discount" | "status" | "package_id" | "notes", [R<"visit_items_visit_id_fkey","visit_id","visits">, R<"visit_items_staff_id_fkey","staff_id","staff">, R<"visit_items_service_id_fkey","service_id","services">]>;
-      customer_packages: Tbl<CustomerPackage, "service_id" | "used_sessions" | "price_paid" | "purchased_at" | "expires_at" | "notes", [R<"customer_packages_customer_id_fkey","customer_id","customers">]>;
+      customer_packages: Tbl<CustomerPackage, "service_id" | "used_sessions" | "price_paid" | "purchased_at" | "expires_at" | "notes" | "sale_id" | "is_active", [R<"customer_packages_customer_id_fkey","customer_id","customers">]>;
       expenses: Tbl<Expense, "expense_date" | "category" | "description" | "method" | "staff_id" | "created_by", [R<"expenses_staff_id_fkey","staff_id","staff">]>;
       sales: Tbl<Sale, "visit_id" | "customer_id" | "sale_date" | "subtotal" | "discount" | "total" | "notes" | "created_by", [R<"sales_visit_id_fkey","visit_id","visits">, R<"sales_customer_id_fkey","customer_id","customers">]>;
-      sale_payments: Tbl<SalePayment, never, [R<"sale_payments_sale_id_fkey","sale_id","sales">]>;
+      sale_payments: Tbl<SalePayment, "ref", [R<"sale_payments_sale_id_fkey","sale_id","sales">]>;
       sale_items: Tbl<SaleItem, "visit_item_id" | "kind" | "staff_id" | "qty" | "unit_price" | "discount" | "total", [R<"sale_items_sale_id_fkey","sale_id","sales">, R<"sale_items_staff_id_fkey","staff_id","staff">, R<"sale_items_visit_item_id_fkey","visit_item_id","visit_items">]>;
       staff_payouts: Tbl<StaffPayout, "method" | "notes" | "paid_at" | "created_by", [R<"staff_payouts_staff_id_fkey","staff_id","staff">]>;
+      gift_cards: Tbl<GiftCard, "buyer_name" | "customer_id" | "sale_id" | "expires_at" | "notes" | "created_by", [R<"gift_cards_customer_id_fkey","customer_id","customers">, R<"gift_cards_sale_id_fkey","sale_id","sales">]>;
+      gift_card_uses: Tbl<GiftCardUse, "sale_id", [R<"gift_card_uses_gift_card_id_fkey","gift_card_id","gift_cards">]>;
+      loyalty_ledger: Tbl<LoyaltyLedger, "reason" | "sale_id", [R<"loyalty_ledger_customer_id_fkey","customer_id","customers">]>;
       message_templates: { Row: MessageTemplate; Insert: { kind: string; locale: string; body: string; updated_at?: string }; Update: Partial<MessageTemplate>; Relationships: [] };
       message_log: Tbl<MessageLog, "customer_id" | "visit_id" | "channel" | "body" | "sent_at" | "sent_by", [R<"message_log_customer_id_fkey","customer_id","customers">, R<"message_log_visit_id_fkey","visit_id","visits">]>;
       booking_requests: Tbl<BookingRequest, "last_name" | "email" | "locale" | "staff_id" | "notes" | "status" | "visit_id" | "ip_hash", [R<"booking_requests_service_id_fkey","service_id","services">, R<"booking_requests_staff_id_fkey","staff_id","staff">]>;

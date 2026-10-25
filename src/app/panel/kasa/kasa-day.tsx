@@ -2,17 +2,17 @@
 import { useMemo, useState, useTransition, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import type { Staff, PayMethod } from "@/lib/database.types";
-import type { DayVisit } from "@/lib/queries/kasa";
+import type { DayVisit, OtherSale } from "@/lib/queries/kasa";
 import { money, fmtTime, fullName } from "@/lib/format";
 import { closeVisit, voidSale, addExpense, deleteExpense } from "./actions";
 import { Modal } from "@/app/panel/takvim/day-calendar";
 
-const METHOD: Record<PayMethod, string> = { cash: "Nakit", card: "Kart", transfer: "Havale", online: "Online", package: "Paket", gift_card: "Hediye çeki", other: "Diğer" };
+const METHOD: Record<PayMethod, string> = { cash: "Nakit", card: "Kart", transfer: "Havale", online: "Online", gift_card: "Hediye çeki", points: "Puan", package: "Paket", other: "Diğer" };
 const CATS = ["malzeme", "kira", "fatura", "maaş", "avans", "prim", "pazarlama", "temizlik", "yemek", "diğer"];
 
 type Expense = { id: string; category: string; description: string; amount: number; method: PayMethod; staff_id: string | null; staff_name: string | null };
 
-export function KasaDay(props: { date: string; visits: DayVisit[]; expenses: Expense[]; staff: Staff[]; earnings: Record<string, { service: number; product: number }>; canWrite: boolean; isManager: boolean }) {
+export function KasaDay(props: { date: string; visits: DayVisit[]; otherSales: OtherSale[]; expenses: Expense[]; staff: Staff[]; earnings: Record<string, { service: number; product: number }>; canWrite: boolean; isManager: boolean }) {
   const { visits, staff, canWrite } = props;
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -48,6 +48,20 @@ export function KasaDay(props: { date: string; visits: DayVisit[]; expenses: Exp
             } />
           ))}
         </section>
+        {props.otherSales.length > 0 && (
+          <section className="panel grid gap-2">
+            <div className="flex items-baseline justify-between"><h2 className="text-lg font-bold">Paket / çek satışları</h2><span className="text-xs text-muted">{props.otherSales.length}</span></div>
+            {props.otherSales.map((o) => (
+              <div key={o.id} className="grid grid-cols-[1fr_auto] gap-3 items-center rounded-xl bg-sunk px-3 py-2">
+                <div className="min-w-0">
+                  <div className="font-semibold truncate">{o.customer ? fullName(o.customer) : "Müşterisiz"} <span className="text-muted font-normal text-xs">· {o.items.map((i) => i.name).join(", ")}</span></div>
+                  <div className="text-[11px] text-muted">{o.payments.map((p) => `${METHOD[p.method]} ${money(p.amount)}`).join(" + ")}</div>
+                </div>
+                <div className="text-right"><div className="num font-bold">{money(o.total)}</div>{props.isManager && <button className="text-[11px] text-bad hover:underline" disabled={pending} onClick={() => { if (confirm("Satış iptal edilsin mi?")) run(() => voidSale(o.id)); }}>iptal et</button>}</div>
+              </div>
+            ))}
+          </section>
+        )}
         {err && <p className="pill bad">{err}</p>}
       </div>
 
@@ -113,13 +127,18 @@ function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; staffName
   const items = v.items.filter((i) => i.status !== "cancelled");
   const [prices, setPrices] = useState<Record<string, string>>(Object.fromEntries(items.map((i) => [i.id, String(Number(i.price))])));
   const [disc, setDisc] = useState(String(v.discount_percent || 0));
-  const subtotal = useMemo(() => items.reduce((s, i) => s + (Number(prices[i.id]) || 0) - Number(i.discount), 0), [items, prices]);
+  const [pkgUse, setPkgUse] = useState<Record<string, string>>({});
+  const pkgs = v.packages ?? [];
+  const pkgFor = (i: DayVisit["items"][number]) => pkgs.filter((p) => !p.service_id || p.service_id === i.service_id);
+  const pkgRemaining = (pid: string) => { const p = pkgs.find((x) => x.id === pid)!; return p.total_sessions - p.used_sessions - Object.values(pkgUse).filter((x) => x === pid).length; };
+  const subtotal = useMemo(() => items.reduce((s, i) => s + (pkgUse[i.id] ? 0 : (Number(prices[i.id]) || 0) - Number(i.discount)), 0), [items, prices, pkgUse]);
   const total = Math.round(subtotal * (1 - (Number(disc) || 0) / 100));
-  const [pays, setPays] = useState<{ method: PayMethod; amount: string }[]>([{ method: "cash", amount: "" }]);
+  const [pays, setPays] = useState<{ method: PayMethod; amount: string; ref?: string }[]>([{ method: "cash", amount: "" }]);
+  const points = v.customer?.loyalty_points ?? 0;
   const paid = pays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const remaining = total - paid;
 
-  function setPay(i: number, patch: Partial<{ method: PayMethod; amount: string }>) { setPays(pays.map((p, k) => (k === i ? { ...p, ...patch } : p))); }
+  function setPay(i: number, patch: Partial<{ method: PayMethod; amount: string; ref: string }>) { setPays(pays.map((p, k) => (k === i ? { ...p, ...patch } : p))); }
   function fillRemaining(i: number) { setPay(i, { amount: String(Math.max(0, remaining + (Number(pays[i].amount) || 0))) }); }
 
   function submit() {
@@ -127,8 +146,9 @@ function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; staffName
     start(async () => {
       const r = await closeVisit({
         visitId: v.id, discountPercent: Number(disc) || 0,
-        payments: pays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0 })),
+        payments: pays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0, ref: p.ref })),
         itemOverrides: Object.fromEntries(items.map((i) => [i.id, Number(prices[i.id]) || 0])),
+        packageUse: pkgUse,
       });
       if (!r.ok) setErr(r.error); else onDone();
     });
@@ -140,8 +160,15 @@ function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; staffName
         <div className="grid gap-2">
           {items.map((i) => (
             <div key={i.id} className="grid grid-cols-[1fr_110px] gap-2 items-center">
-              <span className="min-w-0"><span className="font-semibold block truncate">{i.service_name}</span><span className="text-[11px] text-muted">{fmtTime(i.starts_at)} · {staffName(i.staff_id)}</span></span>
-              <span className="inp"><input inputMode="decimal" value={prices[i.id]} onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} className="text-right" /></span>
+              <span className="min-w-0"><span className="font-semibold block truncate">{i.service_name}</span><span className="text-[11px] text-muted">{fmtTime(i.starts_at)} · {staffName(i.staff_id)}</span>
+                {pkgFor(i).length > 0 && (
+                  <label className="flex items-center gap-1 text-xs mt-1">
+                    <input type="checkbox" checked={!!pkgUse[i.id]} onChange={(e) => { const pid = pkgFor(i).find((p) => pkgRemaining(p.id) > 0 || pkgUse[i.id] === p.id)?.id; const n = { ...pkgUse }; if (e.target.checked && pid) n[i.id] = pid; else delete n[i.id]; setPkgUse(n); }} />
+                    Paketten düş {pkgUse[i.id] ? <span className="text-muted">({pkgs.find((p) => p.id === pkgUse[i.id])?.name} · kalan {pkgRemaining(pkgUse[i.id])})</span> : <span className="text-muted">({pkgFor(i).map((p) => `${p.name} ${p.total_sessions - p.used_sessions}`).join(", ")})</span>}
+                  </label>
+                )}
+              </span>
+              {pkgUse[i.id] ? <span className="text-right text-sm text-good font-semibold">paket</span> : <span className="inp"><input inputMode="decimal" value={prices[i.id]} onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} className="text-right" /></span>}
             </div>
           ))}
         </div>
@@ -153,9 +180,10 @@ function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; staffName
           <div className="eyebrow">Ödeme</div>
           {pays.map((p, i) => (
             <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-              <span className="inp"><select value={p.method} onChange={(e) => setPay(i, { method: e.target.value as PayMethod })}>{(Object.keys(METHOD) as PayMethod[]).map((m) => <option key={m} value={m}>{METHOD[m]}</option>)}</select></span>
+              <span className="inp"><select value={p.method} onChange={(e) => setPay(i, { method: e.target.value as PayMethod })}>{(Object.keys(METHOD) as PayMethod[]).filter((m) => m !== "package").map((m) => <option key={m} value={m}>{METHOD[m]}{m === "points" ? ` (${points})` : ""}</option>)}</select></span>
               <span className="inp"><input inputMode="decimal" placeholder={String(Math.max(0, remaining + (Number(p.amount) || 0)))} value={p.amount} onChange={(e) => setPay(i, { amount: e.target.value })} /></span>
               <button type="button" className="btn ghost sm" onClick={() => fillRemaining(i)} title="Kalanı doldur">↵</button>
+              {p.method === "gift_card" && <span className="inp col-span-3"><input placeholder="Hediye çeki kodu (BB-XXXX-XXXX)" value={p.ref ?? ""} onChange={(e) => setPay(i, { ref: e.target.value.toUpperCase() })} /></span>}
             </div>
           ))}
           <div className="flex gap-2 items-center">

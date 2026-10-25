@@ -30,6 +30,12 @@ export default async function SettingsPage({ searchParams }: PageProps<"/panel/a
             <label className="f">Instagram<span className="inp"><input name="instagram_url" defaultValue={s.instagram_url} /></span></label>
             <label className="f">KDV oranı<span className="inp"><input name="kdv_rate" defaultValue={String(s.kdv_rate)} inputMode="decimal" /></span></label>
           </div>
+          <div className="eyebrow">Sadakat & paket</div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <label className="f">Puan kazanım yüzdesi (0 = kapalı)<span className="inp"><input name="loyalty_earn_percent" defaultValue={String(s.loyalty_earn_percent)} inputMode="decimal" /></span></label>
+            <label className="f">1 puan = kaç ₺<span className="inp"><input name="loyalty_point_value" defaultValue={String(s.loyalty_point_value)} inputMode="decimal" /></span></label>
+            <label className="f">Paket geçerlilik (ay)<span className="inp"><input name="package_default_months" defaultValue={String(s.package_default_months)} inputMode="numeric" /></span></label>
+          </div>
           <div className="eyebrow">Çalışma saatleri</div>
           <div className="grid grid-cols-3 gap-3">
             <label className="f">Açılış<span className="inp"><input name="open_time" type="time" defaultValue={s.open_time.slice(0, 5)} /></span></label>
