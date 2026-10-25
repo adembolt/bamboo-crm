@@ -73,11 +73,12 @@ export async function POST(req: NextRequest) {
 
     const startMin = +r.start.slice(0, 2) * 60 + +r.start.slice(3), endMin0 = +r.end.slice(0, 2) * 60 + +r.end.slice(3);
     const endMin = endMin0 > startMin ? endMin0 : startMin + 60;
-    const matched = svcParts.map((p) => { const code = p.slice(0, 4); const s = svcByCode.get(code); if (!s) report.unmatchedServices.set(p.slice(0, 60), (report.unmatchedServices.get(p.slice(0, 60)) ?? 0) + 1); return { code, s, label: p }; });
+    // Kodu hizmet listesinde olmayan parçalar (ör. "1490 borç") nota düşer
+    const matched = svcParts.flatMap((p) => { const code = p.slice(0, 4); const s = svcByCode.get(code); if (!s) { report.unmatchedServices.set(p.slice(0, 60), (report.unmatchedServices.get(p.slice(0, 60)) ?? 0) + 1); notes.push(p); return []; } return [{ code, s, label: p }]; });
     const total = r.price ?? matched.reduce((a, x) => a + Number(x.s?.price ?? 0), 0);
     const items: Parsed["items"] = [];
     if (!matched.length) {
-      items.push({ service_id: null, service_name: (r.name || "DIKIDI randevu").slice(0, 160), starts: localToIso(isoDate, r.start), ends: localToIso(isoDate, hhmmOf(endMin)), price: total });
+      items.push({ service_id: null, service_name: (phoneD ? "DIKIDI randevu" : r.name || "DIKIDI randevu").slice(0, 160), starts: localToIso(isoDate, r.start), ends: localToIso(isoDate, hhmmOf(endMin)), price: total });
     } else {
       const durs = matched.map((x) => Math.max(5, Number(x.s?.duration_min ?? 30)));
       const dsum = durs.reduce((a, b) => a + b, 0);
