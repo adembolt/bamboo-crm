@@ -3,6 +3,8 @@ import { requireSession } from "@/lib/auth";
 import { loadDay, loadServicesForPicker } from "@/lib/queries/calendar";
 import { todayIso, addDays, fmtDateLong } from "@/lib/format";
 import { DayCalendar } from "./day-calendar";
+import { MiniCalendar, KasaSnapshot } from "./side-panel";
+import { loadKasaDay, summarize } from "@/lib/queries/kasa";
 
 export const metadata = { title: "Takvim" };
 
@@ -10,7 +12,14 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
   const sp = await searchParams;
   const d = typeof sp.d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.d) ? sp.d : todayIso();
   const { supabase, profile } = await requireSession();
-  const [day, picker] = await Promise.all([loadDay(supabase, d), loadServicesForPicker(supabase)]);
+  const monthStart = d.slice(0, 7) + "-01";
+  const monthEnd = new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0)).toISOString().slice(0, 10);
+  const [day, picker, kasa, { data: monthVisits }] = await Promise.all([
+    loadDay(supabase, d), loadServicesForPicker(supabase), loadKasaDay(supabase, d),
+    supabase.from("visits").select("visit_date").gte("visit_date", monthStart).lte("visit_date", monthEnd).neq("status", "cancelled"),
+  ]);
+  const sum = summarize(kasa.visits, kasa.expenses, Number(kasa.settings.kdv_rate), kasa.otherSales);
+  const busyDays = new Set((monthVisits ?? []).map((v) => v.visit_date));
   const canWrite = !!profile && ["owner", "manager", "reception"].includes(profile.role);
 
   return (
@@ -24,16 +33,22 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           <span className="inp"><input type="date" name="d" defaultValue={d} /></span>
         </form>
       </header>
-      <DayCalendar
-        date={d}
-        staff={day.staff}
-        items={day.items}
-        timeOff={day.timeOff}
-        settings={{ open_time: day.settings.open_time, close_time: day.settings.close_time, slot_minutes: day.settings.slot_minutes }}
-        services={picker.services}
-        categories={picker.categories}
-        canWrite={canWrite}
-      />
+      <div className="grid xl:grid-cols-[1fr_260px] gap-4 items-start">
+        <DayCalendar
+          date={d}
+          staff={day.staff}
+          items={day.items}
+          timeOff={day.timeOff}
+          settings={{ open_time: day.settings.open_time, close_time: day.settings.close_time, slot_minutes: day.settings.slot_minutes }}
+          services={picker.services}
+          categories={picker.categories}
+          canWrite={canWrite}
+        />
+        <aside className="grid gap-4 xl:sticky xl:top-4">
+          <MiniCalendar date={d} busyDays={busyDays} />
+          <KasaSnapshot date={d} gross={sum.gross} byMethod={sum.byMethod} expected={sum.expected} openCount={kasa.visits.filter((v) => !v.sale).length} closedCount={kasa.visits.filter((v) => v.sale).length + kasa.otherSales.length} />
+        </aside>
+      </div>
     </div>
   );
 }

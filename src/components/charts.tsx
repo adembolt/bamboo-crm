@@ -4,7 +4,7 @@ import { money } from "@/lib/format";
 
 import { SERIES, type Slice } from "@/lib/charts";
 
-export function Donut({ title, slices, total, format = money, empty = "Veri yok" }: { title: string; slices: Slice[]; total?: number; format?: (n: number) => string; empty?: string }) {
+export function Donut({ title, slices, total, format = money, empty = "Veri yok", bare }: { title: string; slices: Slice[]; total?: number; format?: (n: number) => string; empty?: string; bare?: boolean }) {
   const [hover, setHover] = useState<number | null>(null);
   const sum = slices.reduce((a, s) => a + s.value, 0);
   const R = 56, r = 38, C = 70;
@@ -24,8 +24,8 @@ export function Donut({ title, slices, total, format = money, empty = "Veri yok"
   const active = hover !== null ? slices[hover] : null;
   const single = slices.length === 1;
   return (
-    <figure className="panel grid gap-3 m-0">
-      <figcaption className="font-bold">{title}</figcaption>
+    <figure className={`${bare ? "" : "panel "}grid gap-3 m-0`}>
+      {title && <figcaption className="font-bold">{title}</figcaption>}
       {!sum ? <p className="text-sm text-muted">{empty}</p> : (
         <div className="grid grid-cols-[140px_1fr] gap-3 items-center">
           <svg viewBox="0 0 140 140" width="140" height="140" role="img" aria-label={title}>
