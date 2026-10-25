@@ -134,9 +134,11 @@ def main():
         kind = "consultation" if cat == "konsultasyon" else ("package" if sessions > 1 else "service")
         if re.search(r"SATIŞ|CREAM|KREM|STUD EARRINGS|ÇİVİ KÜPE", name, re.I): kind = "product_like"
         sort = int(float(code) * 10) if code else 99999
-        vals.append(f"  ((select id from public.service_categories where code = {q(cat)}), {q(code) if code else 'null'}, {q(tr)}, {q(en)}, {q(ru)}, {dur}, {price:.2f}, {sessions}, {q(kind)}, false, true, {sort}, {q(name)})")
-    out.append("insert into public.services (category_id, code, name_tr, name_en, name_ru, duration_min, price, session_count, kind, online_visible, is_active, sort_order, dikidi_id) values")
-    out.append(",\n".join(vals) + ";")
+        vals.append(f"({q(cat)},{q(code) if code else 'null'},{q(tr)},{q(en)},{q(ru)},{dur},{price:.0f},{sessions},{q(kind)},{sort},{q(name)})")
+    out.append("insert into public.services (category_id, code, name_tr, name_en, name_ru, duration_min, price, session_count, kind, sort_order, dikidi_id)")
+    out.append("select c.id, v.code, v.tr, v.en, v.ru, v.dur, v.price, v.sessions, v.kind, v.sort, v.src from (values")
+    out.append(",\n".join(vals) + ") as v(cat, code, tr, en, ru, dur, price, sessions, kind, sort, src)")
+    out.append("join public.service_categories c on c.code = v.cat;")
     out.append(""); out.append("commit;")
     OUT.write_text("\n".join(out), encoding="utf-8")
     print(f"{len(vals)} hizmet → {OUT.relative_to(ROOT)}")
