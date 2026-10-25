@@ -5,6 +5,9 @@ import type { Staff, VisitStatus } from "@/lib/database.types";
 import type { DayItem } from "@/lib/queries/calendar";
 import { minutesOfDay, hhmm, money, fmtTime, fullName, initials, duration } from "@/lib/format";
 import { addVisitItem, setVisitStatus, deleteItem, type NewItemInput } from "./actions";
+import { loadVisitForClose } from "@/app/panel/kasa/actions";
+import { CloseDialog } from "@/app/panel/kasa/close-dialog";
+import type { DayVisit } from "@/lib/queries/kasa";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
 
 type ServiceLite = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en: string; duration_min: number; buffer_min: number; price: number; kind: string };
@@ -226,6 +229,7 @@ function VisitCard(props: { items: DayItem[]; date: string; staff: Staff[]; canW
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState("");
+  const [closing, setClosing] = useState<DayVisit | null>(null);
   const v = items[0]?.visit;
   const c = v?.customer;
   const active = items.filter((i) => i.status !== "cancelled").sort((a, b) => a.starts_at.localeCompare(b.starts_at));
@@ -286,7 +290,7 @@ function VisitCard(props: { items: DayItem[]; date: string; staff: Staff[]; canW
         {canWrite && (
           <div className="flex gap-2 flex-wrap">
             <button className="btn" onClick={props.onAdd}>+ Hizmet ekle</button>
-            {v.status !== "completed" && <a className="btn ghost" href={`/panel/kasa?d=${props.date}`}>₺ Ödeme al</a>}
+            {v.status !== "completed" && <button className="btn ghost" disabled={pending} onClick={() => { setErr(""); start(async () => { const r = await loadVisitForClose(v.id); if (!r.ok) setErr(r.error); else setClosing(r.visit); }); }}>₺ Ödeme al</button>}
             {v.status !== "arrived" && v.status !== "completed" && <button className="btn ghost" disabled={pending} onClick={() => run(() => setVisitStatus(v.id, "arrived"))}>Geldi</button>}
             {v.status !== "completed" && <button className="btn ghost" disabled={pending} onClick={() => run(() => setVisitStatus(v.id, "completed"))}>Tamamlandı</button>}
             {v.status !== "no_show" && <button className="btn ghost" disabled={pending} onClick={() => run(() => setVisitStatus(v.id, "no_show"))}>Gelmedi</button>}
@@ -294,6 +298,7 @@ function VisitCard(props: { items: DayItem[]; date: string; staff: Staff[]; canW
           </div>
         )}
       </div>
+      {closing && <CloseDialog v={closing} staffName={staffName} onClose={() => setClosing(null)} onDone={() => { setClosing(null); props.onClose(); router.refresh(); }} />}
     </Modal>
   );
 }

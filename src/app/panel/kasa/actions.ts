@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { requireOps, requireManager } from "@/lib/auth";
 import type { PayMethod } from "@/lib/database.types";
+import { loadKasaDay, type DayVisit } from "@/lib/queries/kasa";
 
 export type CloseVisitInput = {
   visitId: string;
@@ -263,4 +264,16 @@ export async function adjustBalance(customerId: string, amount: number, reason: 
   await supabase.from("balance_ledger").insert({ customer_id: customerId, amount, reason: reason || "Elle düzeltme", created_by: user.id });
   revalidatePath(`/panel/musteriler/${customerId}`);
   return { ok: true as const };
+}
+
+/** Takvimden ödeme almak için tek ziyareti (paketler, bakiye, puan ile) getirir */
+export async function loadVisitForClose(visitId: string): Promise<{ ok: true; visit: DayVisit } | { ok: false; error: string }> {
+  const { supabase } = await requireOps();
+  const { data: v } = await supabase.from("visits").select("visit_date").eq("id", visitId).single();
+  if (!v) return { ok: false, error: "Ziyaret bulunamadı." };
+  const day = await loadKasaDay(supabase, v.visit_date);
+  const visit = day.visits.find((x) => x.id === visitId);
+  if (!visit) return { ok: false, error: "Ziyaret bulunamadı." };
+  if (visit.sale) return { ok: false, error: "Bu ziyaretin ödemesi zaten alınmış." };
+  return { ok: true, visit };
 }
