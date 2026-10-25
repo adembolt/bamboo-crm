@@ -10,7 +10,8 @@ import { CustomerPicker, type PickedCustomer } from "@/components/customer-picke
 type ServiceLite = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en: string; duration_min: number; buffer_min: number; price: number; kind: string };
 type CategoryLite = { id: string; name_tr: string; sort_order: number; color: string };
 
-const PX_PER_MIN = 1.6;
+const PX_PER_MIN = 2; // 15 dk = 30px
+const GRID_MIN = 15;
 const STATUS_LABEL: Record<VisitStatus, string> = {
   pending: "Onay bekliyor", confirmed: "Onaylı", arrived: "Geldi", completed: "Tamamlandı", no_show: "Gelmedi", cancelled: "İptal",
 };
@@ -66,12 +67,10 @@ export function DayCalendar(props: {
     return items.filter((i) => i.visit_id === selectedVisit);
   }, [items, selectedVisit]);
 
-  const hours: number[] = [];
-  for (let t = openMin; t <= closeMin; t += 60) hours.push(t);
 
   function onSlotClick(staffId: string | null, minute: number) {
     if (!canWrite) return;
-    const snapped = Math.floor(minute / settings.slot_minutes) * settings.slot_minutes;
+    const snapped = Math.floor(minute / GRID_MIN) * GRID_MIN;
     setDraft({ staffId, startHHMM: hhmm(Math.max(openMin, Math.min(snapped, closeMin - settings.slot_minutes))) });
   }
 
@@ -122,9 +121,9 @@ export function DayCalendar(props: {
 
           {/* saat ekseni */}
           <div className="relative border-r border-line" style={{ height: totalMin * PX_PER_MIN }}>
-            {hours.map((h) => (
-              <div key={h} className="absolute left-0 right-0 text-[11px] text-muted font-semibold px-2 -translate-y-1/2" style={{ top: (h - openMin) * PX_PER_MIN }}>
-                {hhmm(h)}
+            {Array.from({ length: Math.floor(totalMin / GRID_MIN) + 1 }, (_, i) => openMin + i * GRID_MIN).map((m) => (
+              <div key={m} className={`absolute left-0 right-0 px-2 -translate-y-1/2 ${m % 60 === 0 ? "text-[11px] text-muted font-semibold" : m % 30 === 0 ? "text-[10px] text-muted/80" : "text-[9px] text-muted/50"}`} style={{ top: (m - openMin) * PX_PER_MIN }}>
+                {m % 60 === 0 || m % 30 === 0 ? hhmm(m) : `:${String(m % 60).padStart(2, "0")}`}
               </div>
             ))}
           </div>
@@ -134,7 +133,7 @@ export function DayCalendar(props: {
             <div
               key={col.id ?? "none"}
               className="relative border-l border-line"
-              style={{ height: totalMin * PX_PER_MIN, backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${60 * PX_PER_MIN - 1}px, var(--line) ${60 * PX_PER_MIN - 1}px, var(--line) ${60 * PX_PER_MIN}px)` }}
+              style={{ height: totalMin * PX_PER_MIN, backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${GRID_MIN * PX_PER_MIN - 1}px, color-mix(in srgb, var(--line) 55%, transparent) ${GRID_MIN * PX_PER_MIN - 1}px, color-mix(in srgb, var(--line) 55%, transparent) ${GRID_MIN * PX_PER_MIN}px), repeating-linear-gradient(to bottom, transparent 0, transparent ${60 * PX_PER_MIN - 1}px, var(--line) ${60 * PX_PER_MIN - 1}px, var(--line) ${60 * PX_PER_MIN}px)` }}
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest("[data-item]")) return;
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
