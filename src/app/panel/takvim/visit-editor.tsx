@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { useRouter } from "next/navigation";
 import type { Staff, VisitStatus } from "@/lib/database.types";
 import { Modal } from "@/components/modal";
+import { TopUpDialog } from "@/components/topup-dialog";
 import { ServiceCombobox } from "@/components/service-combobox";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
 import { createClient } from "@/lib/supabase/client";
@@ -10,7 +11,7 @@ import { money, hhmm, fmtDate, fmtTime, todayIso, addDays } from "@/lib/format";
 import { loadVisitForClose } from "@/app/panel/kasa/actions";
 import { CloseDialog } from "@/app/panel/kasa/close-dialog";
 import type { DayVisit } from "@/lib/queries/kasa";
-import { getVisitDetail, saveVisit, setVisitFlag, repeatVisit, checkPromo, addVisitFile, deleteVisitFile, staffDayItems, quickCustomer, type SaveLine } from "./visit-actions";
+import { getVisitDetail, saveVisit, repeatVisit, checkPromo, addVisitFile, deleteVisitFile, staffDayItems, quickCustomer, type SaveLine } from "./visit-actions";
 
 type Svc = { id: string; category_id: string | null; code: string | null; name_tr: string; duration_min: number; buffer_min: number; price: number };
 type Cat = { id: string; name_tr: string; sort_order: number };
@@ -26,6 +27,8 @@ const ST: Record<VisitStatus, string> = { pending: "Onay bekliyor", confirmed: "
 const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 let seq = 0; const k = () => `n${++seq}`;
+type SnapIn = { date: string; status: string; notes: string; color: string; anon: boolean; remind: number[]; remindConfirm: boolean; review: string; promo: string; brk: number; customerId: string | null; newName: string; lines: Line[] };
+const snapOf = (x: SnapIn) => JSON.stringify([x.date, x.status, x.notes, x.color, x.anon, x.remind, x.remindConfirm, x.review, x.promo, x.brk, x.customerId, x.newName, x.lines.map((l) => [l.id, l.serviceId, l.serviceName, l.staffId, l.time, l.duration, l.price, l.discAmt])]);
 
 export function VisitEditor(props: { visitId: string; staff: Staff[]; services: Svc[]; categories: Cat[]; staffServices: Record<string, string[]>; openTime: string; closeTime: string; canWrite: boolean; onClose: () => void }) {
   const { visitId, staff, services, categories, canWrite, onClose } = props;
@@ -55,6 +58,11 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
   const [repeatDate, setRepeatDate] = useState("");
   const [dayItems, setDayItems] = useState<{ id: string; staffId: string | null; start: string; end: string }[]>([]);
   const [closing, setClosing] = useState<DayVisit | null>(null);
+  const [newFiles, setNewFiles] = useState<File[]>([]);          // Kaydet'e basınca yüklenecek
+  const [delFiles, setDelFiles] = useState<Set<string>>(new Set()); // Kaydet'e basınca silinecek
+  const [initialSnap, setInitialSnap] = useState("");
+  const [topUp, setTopUp] = useState(false);
+  const [extraBalance, setExtraBalance] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // resetForm=false: yalnızca ek bilgileri (dosyalar, geçmiş, mesajlar) yeniler; kaydedilmemiş form değişikliklerine dokunmaz
@@ -68,15 +76,22 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
     setRemind(v.remindOffsets ?? []); setRemindConfirm(v.remindConfirm); setReview(v.reviewRequest || "auto"); setPromo(v.promoCode ?? "");
     setCustomer(r.customer ? { id: r.customer.id, first_name: r.customer.first_name, last_name: r.customer.last_name, phone: r.customer.phone } : null);
     setBrk(r.items.reduce((m, i) => Math.max(m, i.breakMin), 0));
-    setLines(r.items.filter((i) => i.status !== "cancelled" || v.status === "cancelled").map((i) => ({
+    const ls: Line[] = r.items.filter((i) => i.status !== "cancelled" || v.status === "cancelled").map((i) => ({
       key: i.id, id: i.id, serviceId: i.serviceId, serviceName: i.serviceName, staffId: i.staffId, time: i.time, duration: String(i.duration),
       price: String(i.price), discPct: i.price > 0 && i.discount > 0 ? String(r2((i.discount / i.price) * 100)) : "0", discAmt: String(i.discount), packageId: i.packageId,
-    })));
+    }));
+    setLines(ls);
+    const b = r.items.reduce((m, i) => Math.max(m, i.breakMin), 0);
+    setInitialSnap(snapOf({ date: v.date, status: v.status, notes: v.notes ?? "", color: v.color ?? "", anon: v.isAnonymous, remind: v.remindOffsets ?? [], remindConfirm: v.remindConfirm, review: v.reviewRequest || "auto", promo: v.promoCode ?? "", brk: b, customerId: r.customer?.id ?? null, newName: "", lines: ls }));
     setRepeatDate(addDays(v.date, 7));
+    setNewFiles([]); setDelFiles(new Set());
   }, [visitId]);
   useEffect(() => { const id = setTimeout(() => { load(); }, 0); return () => clearTimeout(id); }, [load]);
   useEffect(() => { if (!date) return; let alive = true; staffDayItems(date).then((x) => { if (alive) setDayItems(x); }); return () => { alive = false; }; }, [date]);
 
+  const snap = snapOf({ date, status, notes, color, anon, remind, remindConfirm, review, promo, brk, customerId: anon ? null : customer?.id ?? null, newName: newCust?.first_name ?? "", lines });
+  const dirty = !!initialSnap && (snap !== initialSnap || newFiles.length > 0 || delFiles.size > 0);
+  const tryClose = () => { if (dirty && !confirm("Kaydedilmemiş değişiklikler var. Kaydetmeden kapatılsın mı?")) return; onClose(); };
   const sale = d?.sale ?? null;
   const locked = !canWrite || !!sale;
   const servicesFor = (staffId: string | null) => { const a = staffId ? props.staffServices[staffId] : undefined; return a?.length ? services.filter((s) => a.includes(s.id) || s.id === lines.find((l) => l.staffId === staffId)?.serviceId) : services; };
@@ -141,15 +156,19 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
       const cid = await resolveCustomer(); if (cid === false) return;
       const r = await saveVisit(payload(cid));
       if (!r.ok) { setErr(r.error); return; }
+      for (const f of newFiles) { const e = await uploadNow(f, cid); if (e) { setErr(e); return; } }
+      for (const id of delFiles) await deleteVisitFile(id);
+      setNewFiles([]); setDelFiles(new Set()); setInitialSnap(snap);
       router.refresh();
       if (after) await after(); else onClose();
     });
   }
-  function flag(s: VisitStatus) {
-    setErr(""); start(async () => { const r = await setVisitFlag(visitId, s); if (!r.ok) setErr(r.error); else { setStatus(s); router.refresh(); await load(false); } });
-  }
+  // Durum düğmeleri yalnızca formu değiştirir; Kaydet'e basılınca yazılır
+  function flag(s: VisitStatus) { setErr(""); setStatus((cur) => (cur === s ? "confirmed" : s)); }
   function createSale() {
-    save(async () => { const r = await loadVisitForClose(visitId); if (!r.ok) setErr(r.error); else setClosing(r.visit); });
+    const open = async () => { const r = await loadVisitForClose(visitId); if (!r.ok) setErr(r.error); else setClosing(r.visit); };
+    if (dirty) { if (confirm("Kaydedilmemiş değişiklikler var. Önce kaydedilip ödeme ekranı açılsın mı?")) save(open); }
+    else start(open);
   }
   function doRepeat() {
     setErr(""); start(async () => { const r = await repeatVisit(visitId, repeatDate); if (!r.ok) setErr(r.error); else { setMsg(`Randevu ${fmtDate(r.date)} tarihine kopyalandı.`); setPanel(""); router.refresh(); await load(false); } });
@@ -161,15 +180,18 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
       setPromoInfo(`%${r.percent} indirim uygulandı${r.description ? ` · ${r.description}` : ""}`);
     });
   }
-  async function upload(f: File) {
+  function addFile(f: File) {
     setErr("");
     if (f.size > 15 * 1024 * 1024) { setErr("Dosya 15 MB'den büyük olamaz."); return; }
+    setNewFiles((x) => [...x, f]);
+  }
+  async function uploadNow(f: File, customerId: string | null): Promise<string | null> {
     const sb = createClient();
     const path = `${visitId}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
     const { error } = await sb.storage.from("visit-files").upload(path, f, { contentType: f.type || undefined });
-    if (error) { setErr("Yükleme başarısız: " + error.message); return; }
-    const r = await addVisitFile({ visitId, customerId: d?.customer?.id ?? null, path, name: f.name, mime: f.type, size: f.size });
-    if (!r.ok) setErr(r.error); else await load(false);
+    if (error) return "Yükleme başarısız: " + error.message;
+    const r = await addVisitFile({ visitId, customerId, path, name: f.name, mime: f.type, size: f.size });
+    return r.ok ? null : r.error;
   }
 
   if (loadErr) return <Modal title="Randevu" onClose={onClose}><p className="pill bad">{loadErr}</p></Modal>;
@@ -177,7 +199,7 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
 
   const c = d.customer;
   return (
-    <Modal wide title="Randevuyu düzenle" onClose={onClose} headerExtra={<span className={`pill ${status === "no_show" || status === "cancelled" ? "bad" : status === "pending" ? "warn" : "good"}`}>{ST[status]}</span>}>
+    <Modal wide title="Randevuyu düzenle" onClose={tryClose} headerExtra={<>{dirty && <span className="pill warn">Kaydedilmedi</span>}<span className={`pill ${status === "no_show" || status === "cancelled" ? "bad" : status === "pending" ? "warn" : "good"}`}>{ST[status]}</span></>}>
       <div className="grid gap-4">
         {/* Tarih */}
         <div className="flex flex-wrap items-end gap-3">
@@ -240,7 +262,8 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
                 {c.phone && <a className="hover:underline" href={`tel:${c.phone}`}>{c.phone}</a>}
                 {c.no_show_count > 0 && <span className="text-bad">{c.no_show_count} kez gelmedi</span>}
-                {Number(c.balance) > 0 && <span className="text-good">Bakiye {money(c.balance)}</span>}
+                <span className={Number(c.balance) + extraBalance > 0 ? "text-good font-semibold" : ""}>Bakiye {money(Number(c.balance) + extraBalance)}</span>
+                {canWrite && <button type="button" className="text-green font-semibold hover:underline" onClick={() => setTopUp(true)}>+ Bakiye yükle</button>}
                 {c.loyalty_points > 0 && <span>★ {c.loyalty_points} puan</span>}
                 <button type="button" className="text-green font-semibold hover:underline" onClick={() => setPanel(panel === "history" ? "" : "history")}>Randevu geçmişi ({d.history.length})</button>
               </div>
@@ -300,16 +323,23 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
         </div>
         <div className="grid gap-2">
           <div className="flex items-center gap-3">
-            <input ref={fileRef} type="file" className="hidden" accept=".pdf,.xls,.xlsx,.png,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) start(() => upload(f)); e.target.value = ""; }} />
+            <input ref={fileRef} type="file" className="hidden" accept=".pdf,.xls,.xlsx,.png,.jpg,.jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) addFile(f); e.target.value = ""; }} />
             <button type="button" className="btn ghost" disabled={!canWrite || pending} onClick={() => fileRef.current?.click()}>＋ Dosya ekle</button>
             <span className="text-xs text-muted">PDF, XLS, PNG, JPG · en fazla 15 MB</span>
           </div>
-          {d.files.length > 0 && <div className="flex flex-wrap gap-2">{d.files.map((f) => (
-            <span key={f.id} className="pill gap-2">
-              {f.url ? <a href={f.url} target="_blank" rel="noreferrer" className="hover:underline">{f.file_name}</a> : f.file_name}
-              {canWrite && <button type="button" aria-label="Dosyayı sil" className="text-bad" onClick={() => { if (confirm(`${f.file_name} silinsin mi?`)) start(async () => { await deleteVisitFile(f.id); await load(false); }); }}>✕</button>}
-            </span>
-          ))}</div>}
+          {(d.files.length > 0 || newFiles.length > 0) && <div className="flex flex-wrap gap-2">
+            {d.files.map((f) => { const gone = delFiles.has(f.id); return (
+              <span key={f.id} className={`pill gap-2 ${gone ? "line-through opacity-60" : ""}`} title={gone ? "Kaydet'e basınca silinecek" : ""}>
+                {f.url && !gone ? <a href={f.url} target="_blank" rel="noreferrer" className="hover:underline">{f.file_name}</a> : f.file_name}
+                {canWrite && <button type="button" aria-label={gone ? "Silmeyi geri al" : "Dosyayı sil"} className={gone ? "text-good" : "text-bad"} onClick={() => setDelFiles((x) => { const n = new Set(x); if (n.has(f.id)) n.delete(f.id); else n.add(f.id); return n; })}>{gone ? "↺" : "✕"}</button>}
+              </span>
+            ); })}
+            {newFiles.map((f, i) => (
+              <span key={`new${i}`} className="pill warn gap-2" title="Kaydet'e basınca yüklenecek">⬆ {f.name}
+                <button type="button" aria-label="Eklemekten vazgeç" className="text-bad" onClick={() => setNewFiles((x) => x.filter((_, j) => j !== i))}>✕</button>
+              </span>
+            ))}
+          </div>}
         </div>
 
         {panel === "audit" && (
@@ -333,12 +363,14 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
         <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
           <button type="button" className="text-sm text-green font-semibold hover:underline" onClick={() => setPanel(panel === "audit" ? "" : "audit")}>Değişiklik geçmişi</button>
           <span className="flex-1" />
-          {canWrite && !sale && status !== "cancelled" && <button type="button" className="text-sm text-bad font-semibold hover:underline px-2" disabled={pending} onClick={() => { if (confirm("Randevu iptal edilsin mi?")) flag("cancelled"); }}>Randevuyu iptal et</button>}
+          {canWrite && !sale && status !== "cancelled" && <button type="button" className="text-sm text-bad font-semibold hover:underline px-2" disabled={pending} onClick={() => flag("cancelled")}>Randevuyu iptal et</button>}
+          {canWrite && !sale && status === "cancelled" && !initialSnap.includes('"cancelled"') && <button type="button" className="text-sm text-green font-semibold hover:underline px-2" onClick={() => flag("cancelled")}>İptali geri al</button>}
           {canWrite && <button type="button" className="btn ghost" disabled={pending} onClick={() => setPanel(panel === "repeat" ? "" : "repeat")}>Randevuyu tekrarla</button>}
           {canWrite && !sale && status !== "cancelled" && <button type="button" className="btn" style={{ background: "var(--good)" }} disabled={pending} onClick={createSale}>Satış oluştur</button>}
-          {!locked && <button type="button" className="btn" disabled={pending} onClick={() => save()}>{pending ? "Kaydediliyor…" : "Kaydet"}</button>}
+          {!locked && <button type="button" className="btn" disabled={pending || !dirty} onClick={() => save()}>{pending ? "Kaydediliyor…" : dirty ? "Kaydet" : "Kaydedildi"}</button>}
         </div>
       </div>
+      {topUp && c && <TopUpDialog customerId={c.id} customerName={`${c.first_name} ${c.last_name}`.trim()} balance={Number(c.balance) + extraBalance} onClose={() => setTopUp(false)} onDone={(amt) => { setExtraBalance((b) => b + amt); setTopUp(false); router.refresh(); }} />}
       {closing && <CloseDialog v={closing} staffName={(id) => staff.find((s) => s.id === id)?.full_name ?? "—"} onClose={() => setClosing(null)} onDone={() => { setClosing(null); router.refresh(); onClose(); }} />}
     </Modal>
   );

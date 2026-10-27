@@ -6,6 +6,7 @@ import { money, fmtTime, fullName } from "@/lib/format";
 import { closeVisit } from "./actions";
 import { listProductsForSale } from "@/app/panel/urunler/actions";
 import { Modal } from "@/components/modal";
+import { TopUpDialog } from "@/components/topup-dialog";
 
 export const METHOD: Record<PayMethod, string> = { cash: "Nakit", card: "Kart", transfer: "Havale", online: "Online", balance: "Bakiye", gift_card: "Hediye çeki", points: "Puan", package: "Paket", other: "Diğer" };
 export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; staffName: (id: string | null) => string; onClose: () => void; onDone: () => void }) {
@@ -28,7 +29,8 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
   const sellerId = items.find((i) => i.staff_id)?.staff_id ?? null;
   const [pays, setPays] = useState<{ method: PayMethod; amount: string; ref?: string }[]>([{ method: "cash", amount: "" }]);
   const points = v.customer?.loyalty_points ?? 0;
-  const balance = Number(v.customer?.balance ?? 0);
+  const [balance, setBalance] = useState(Number(v.customer?.balance ?? 0));
+  const [topUp, setTopUp] = useState(false);
   // Bir paketi, eşleşen tüm kalemlere uygula (ödeme bölümünden)
   function applyPackage(pid: string) {
     const p = pkgs.find((x) => x.id === pid); if (!p) return;
@@ -94,9 +96,16 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
         </div>
         <div className="grid gap-2">
           <div className="eyebrow">Ödeme</div>
-          {(balance > 0 || pkgs.length > 0 || points > 0) && (
+          {v.customer && (
+            <div className={`flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 ${balance > 0 ? "bg-gold-soft" : "bg-sunk"}`}>
+              <span className="text-sm">Müşteri bakiyesi: <b className="num">{money(balance)}</b></span>
+              <span className="flex-1" />
+              {balance > 0 && <button type="button" className="btn sm" onClick={() => { const i = pays.findIndex((x) => x.method === "balance"); const amt = String(Math.min(balance, Math.max(0, remaining + (i >= 0 ? Number(pays[i].amount) || 0 : 0)))); if (i >= 0) setPay(i, { amount: amt }); else setPays([{ method: "balance", amount: amt }, ...pays.filter((x) => x.amount)]); }}>Bakiyeden düş</button>}
+              <button type="button" className="btn ghost sm" onClick={() => setTopUp(true)}>+ Bakiye yükle</button>
+            </div>
+          )}
+          {(pkgs.length > 0 || points > 0) && (
             <div className="flex flex-wrap gap-1.5 text-xs">
-              {balance > 0 && <button type="button" className="pill gold hover:brightness-95" onClick={() => { const i = pays.findIndex((x) => x.method === "balance"); const amt = String(Math.min(balance, Math.max(0, remaining + (i >= 0 ? Number(pays[i].amount) || 0 : 0)))); if (i >= 0) setPay(i, { amount: amt }); else setPays([{ method: "balance", amount: amt }, ...pays.filter((x) => x.amount)]); }}>Bakiye {money(balance)} → kullan</button>}
               {pkgs.map((p) => { const used = Object.values(pkgUse).filter((x) => x === p.id).length; const left = p.total_sessions - p.used_sessions - used; return <button key={p.id} type="button" className={`pill ${used ? "good" : ""} hover:brightness-95`} disabled={left <= 0 && !used} onClick={() => used ? setPkgUse(Object.fromEntries(Object.entries(pkgUse).filter(([, x]) => x !== p.id))) : applyPackage(p.id)}>Paket: {p.name} · kalan {left}{used ? ` · ${used} kalem düşüldü ✓` : " → düş"}</button>; })}
               {points > 0 && <span className="pill">{points} puan</span>}
             </div>
@@ -120,6 +129,7 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
           <button className="btn" disabled={pending || Math.abs(remaining) >= 0.5 || total < 0} onClick={submit}>{pending ? "Kaydediliyor…" : "Ödemeyi kaydet"}</button>
         </div>
       </div>
+      {topUp && v.customer && <TopUpDialog customerId={v.customer.id} customerName={fullName(v.customer)} balance={balance} onClose={() => setTopUp(false)} onDone={(amt) => { setBalance((b) => b + amt); setTopUp(false); }} />}
     </Modal>
   );
 }

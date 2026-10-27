@@ -95,9 +95,16 @@ export async function saveVisit(input: SaveVisitInput) {
     }
   }
 
+  // Gelmedi işaretlendiyse müşterinin gelmeme sayacını artır
+  const custAfter = input.isAnonymous ? null : input.customerId;
+  if (input.status === "no_show" && before.status !== "no_show" && custAfter) {
+    const { data: cu } = await supabase.from("customers").select("no_show_count").eq("id", custAfter).single();
+    await supabase.from("customers").update({ no_show_count: (cu?.no_show_count ?? 0) + 1 }).eq("id", custAfter);
+  }
   const changes: string[] = [];
   if (before.visit_date !== input.date) changes.push(`tarih ${before.visit_date} → ${input.date}`);
-  if (before.status !== input.status) changes.push(`durum ${before.status} → ${input.status}`);
+  const ST: Record<string, string> = { pending: "onay bekliyor", confirmed: "onaylı", arrived: "geldi", completed: "tamamlandı", no_show: "gelmedi", cancelled: "iptal" };
+  if (before.status !== input.status) changes.push(`durum: ${ST[before.status] ?? before.status} → ${ST[input.status] ?? input.status}`);
   if ((before.notes ?? "") !== input.notes) changes.push("yorum değişti");
   if (before.customer_id !== (input.isAnonymous ? null : input.customerId)) changes.push("müşteri değişti");
   const bItems = (before.items ?? []).map((i) => `${HHMM(i.starts_at)} ${i.service_name} ${Number(i.price) - Number(i.discount)}`).sort().join(" | ");
