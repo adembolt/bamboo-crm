@@ -12,14 +12,14 @@ export async function complete(opts: { system: string; user: string; maxTokens?:
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: MODEL, max_tokens: opts.maxTokens ?? 400, system: opts.system, messages: [{ role: "user", content: opts.user }] }),
+      body: JSON.stringify({ model: MODEL, max_tokens: Math.max(1500, opts.maxTokens ?? 0), system: opts.system, messages: [{ role: "user", content: opts.user }] }),
       signal: AbortSignal.timeout(25000),
     });
-    const j = (await r.json()) as { content?: { type: string; text?: string }[]; error?: { message?: string } };
+    const j = (await r.json()) as { content?: { type: string; text?: string }[]; error?: { message?: string }; stop_reason?: string };
     if (r.status === 401) return { ok: false, error: `API anahtarı geçersiz (sk-ant-… ile başlamalı; şu an "${key.slice(0, 7)}…" ile başlıyor, ${key.length} karakter). Vercel'de değeri yeniden yapıştırıp Redeploy yapın.` };
     if (!r.ok) return { ok: false, error: j.error?.message ?? `API hatası (${r.status})` };
     const text = (j.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
-    return text ? { ok: true, text } : { ok: false, error: "Boş yanıt" };
+    return text ? { ok: true, text } : { ok: false, error: `Boş yanıt (stop: ${j.stop_reason ?? "?"}; içerik: ${(j.content ?? []).map((c) => c.type).join(",") || "yok"})` };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Bağlantı hatası" };
   }
