@@ -14,8 +14,10 @@ export type DayItem = {
   discount: number;
   status: VisitStatus;
   notes: string;
+  break_min: number;
   visit: {
     id: string;
+    color: string;
     status: VisitStatus;
     source: VisitSource;
     notes: string;
@@ -33,7 +35,7 @@ export async function loadDay(supabase: SupabaseClient<Database>, isoDate: strin
     supabase
       .from("visit_items")
       .select(
-        "id, visit_id, service_id, service_name, staff_id, starts_at, ends_at, price, discount, status, notes, visit:visits!inner(id, status, source, notes, discount_percent, customer:customers(id, first_name, last_name, phone, tags, no_show_count))",
+        "id, visit_id, service_id, service_name, staff_id, starts_at, ends_at, price, discount, status, notes, break_min, visit:visits!inner(id, color, status, source, notes, discount_percent, customer:customers(id, first_name, last_name, phone, tags, no_show_count))",
       )
       .gte("starts_at", dayStart)
       .lte("starts_at", dayEnd)

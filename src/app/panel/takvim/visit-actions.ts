@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireOps } from "@/lib/auth";
-import { localToIso, todayIso } from "@/lib/format";
+import { localToIso, todayIso, normalizePhone } from "@/lib/format";
 import type { VisitStatus } from "@/lib/database.types";
 
 const ISTANBUL = (iso: string) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Istanbul" }).format(new Date(iso));
@@ -185,3 +185,18 @@ export async function staffDayItems(date: string) {
   return (data ?? []).map((i) => ({ id: i.id, staffId: i.staff_id, start: HHMM(i.starts_at), end: HHMM(i.ends_at), day: ISTANBUL(i.starts_at) }));
 }
 
+
+/** Düzenleme ekranında yeni müşteri: telefon kayıtlıysa onu döndürür */
+export async function quickCustomer(input: { first_name: string; last_name: string; phone: string }) {
+  const { supabase } = await requireOps();
+  const first = input.first_name.trim();
+  if (!first) return { ok: false as const, error: "Ad gerekli." };
+  const phone = normalizePhone(input.phone ?? "");
+  if (phone) {
+    const { data: ex } = await supabase.from("customers").select("id, first_name, last_name, phone").eq("phone", phone).maybeSingle();
+    if (ex) return { ok: true as const, customer: ex };
+  }
+  const { data, error } = await supabase.from("customers").insert({ first_name: first, last_name: input.last_name.trim(), phone, source: "salon" }).select("id, first_name, last_name, phone").single();
+  if (error || !data) return { ok: false as const, error: error?.message ?? "Müşteri oluşturulamadı" };
+  return { ok: true as const, customer: data };
+}

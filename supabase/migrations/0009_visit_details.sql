@@ -41,3 +41,8 @@ create policy "visit files write" on storage.objects for insert with check (buck
 create policy "visit files delete" on storage.objects for delete using (bucket_id = 'visit-files' and public.can_write_ops());
 
 create index if not exists audit_entity on public.audit_log (entity, entity_id, created_at desc);
+
+-- Değişiklik geçmişi erişimi
+drop policy if exists audit_read on public.audit_log; drop policy if exists audit_insert on public.audit_log;
+create policy audit_read on public.audit_log for select using (public.is_internal());
+create policy audit_insert on public.audit_log for insert with check (public.is_internal());

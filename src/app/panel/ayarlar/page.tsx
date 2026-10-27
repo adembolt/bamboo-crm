@@ -1,5 +1,5 @@
 import { requireSession } from "@/lib/auth";
-import { saveSettings } from "./actions";
+import { saveSettings, savePromo, togglePromo } from "./actions";
 
 export const metadata = { title: "Ayarlar" };
 
@@ -7,7 +7,10 @@ export default async function SettingsPage({ searchParams }: PageProps<"/panel/a
   const sp = await searchParams;
   const { supabase, profile } = await requireSession();
   const canManage = !!profile && ["owner", "manager"].includes(profile.role);
-  const { data: s } = await supabase.from("settings").select("*").eq("id", 1).single();
+  const [{ data: s }, { data: promos }] = await Promise.all([
+    supabase.from("settings").select("*").eq("id", 1).single(),
+    supabase.from("promo_codes").select("*").order("created_at", { ascending: false }),
+  ]);
   if (!s) return null;
   const days = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
   return (
@@ -57,6 +60,29 @@ export default async function SettingsPage({ searchParams }: PageProps<"/panel/a
         {!canManage && <p className="pill warn">Bu hesabın rolü ayar değiştirmeye izin vermiyor ({profile?.role ?? "rol yok"}).</p>}
         {canManage && <button className="btn justify-self-end">Kaydet</button>}
       </form>
+
+      <section id="promo" className="panel grid gap-3">
+        <div><h2 className="font-bold">Promosyon kodları</h2><p className="text-xs text-muted">Randevu ekranındaki “Promosyon kodu” alanına girilince tüm hizmetlere yüzde indirim uygular.</p></div>
+        {canManage && (
+          <form action={savePromo} className="grid grid-cols-2 sm:grid-cols-[1fr_90px_1.4fr_1fr_auto] gap-2 items-end">
+            <label className="f">Kod<span className="inp"><input name="code" placeholder="EKIM30" required /></span></label>
+            <label className="f">İndirim %<span className="inp"><input name="percent" inputMode="decimal" required /></span></label>
+            <label className="f">Açıklama<span className="inp"><input name="description" placeholder="ör. Ekim kampanyası" /></span></label>
+            <label className="f">Son gün<span className="inp"><input type="date" name="valid_until" /></span></label>
+            <button className="btn sm">Ekle</button>
+          </form>
+        )}
+        <div className="grid gap-1">
+          {(promos ?? []).map((p) => (
+            <div key={p.code} className={`grid grid-cols-[auto_1fr_auto] gap-3 items-center text-sm py-1 border-b border-dashed border-line last:border-0 ${p.is_active ? "" : "opacity-50"}`}>
+              <b className="font-mono">{p.code}</b>
+              <span className="truncate">%{Number(p.percent)}{p.description ? ` · ${p.description}` : ""}{p.valid_until ? ` · son ${p.valid_until.split("-").reverse().join(".")}` : ""}</span>
+              {canManage && <form action={togglePromo.bind(null, p.code, !p.is_active)}><button className="btn ghost sm">{p.is_active ? "Pasif yap" : "Aktif yap"}</button></form>}
+            </div>
+          ))}
+          {!(promos ?? []).length && <p className="text-sm text-muted">Henüz kod yok.</p>}
+        </div>
+      </section>
     </div>
   );
 }

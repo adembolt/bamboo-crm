@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { BambooLogo } from "@/components/logo";
 import { Nav } from "@/components/nav";
@@ -8,13 +9,13 @@ export default async function PanelLayout({ children }: LayoutProps<"/panel">) {
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-0">
       <aside className="md:w-44 md:flex-none md:border-r border-line bg-surface md:min-h-screen flex md:flex-col items-center md:items-stretch gap-3 px-3 py-2 md:py-4 border-b md:border-b-0">
-        <div className="flex items-center gap-2 md:px-2 md:mb-2">
+        <Link href="/panel/takvim" className="flex items-center gap-2 md:px-2 md:mb-2 rounded-lg hover:bg-sunk" title="Takvime dön" aria-label="Bamboo Beauty & Wellness — takvime dön">
           <BambooLogo size={36} />
           <div className="leading-tight hidden sm:block">
             <div className="font-display font-bold">Bamboo</div>
             <div className="text-[11px] text-muted">Beauty &amp; Wellness</div>
           </div>
-        </div>
+        </Link>
         <Nav />
         <form action={logout} className="md:mt-auto md:px-2 ml-auto md:ml-0">
           <div className="hidden md:block text-xs text-muted mb-1 truncate" title={user.email ?? ""}>

@@ -1,26 +1,18 @@
 "use client";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Staff, VisitStatus } from "@/lib/database.types";
+import type { Staff } from "@/lib/database.types";
 import type { DayItem } from "@/lib/queries/calendar";
-import { minutesOfDay, hhmm, money, fmtTime, fullName, initials, duration } from "@/lib/format";
-import { addVisitItem, setVisitStatus, deleteItem, type NewItemInput } from "./actions";
-import { loadVisitForClose } from "@/app/panel/kasa/actions";
-import { CloseDialog } from "@/app/panel/kasa/close-dialog";
-import type { DayVisit } from "@/lib/queries/kasa";
+import { minutesOfDay, hhmm, money, fmtTime, fullName, duration } from "@/lib/format";
+import { addVisitItem, type NewItemInput } from "./actions";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
+import { VisitEditor } from "./visit-editor";
 
 type ServiceLite = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en: string; duration_min: number; buffer_min: number; price: number; kind: string };
 type CategoryLite = { id: string; name_tr: string; sort_order: number; color: string };
 
 const PX_PER_MIN = 2; // 15 dk = 30px
 const GRID_MIN = 15;
-const STATUS_LABEL: Record<VisitStatus, string> = {
-  pending: "Onay bekliyor", confirmed: "Onaylı", arrived: "Geldi", completed: "Tamamlandı", no_show: "Gelmedi", cancelled: "İptal",
-};
-const STATUS_CLASS: Record<VisitStatus, string> = {
-  pending: "warn", confirmed: "", arrived: "good", completed: "good", no_show: "bad", cancelled: "bad",
-};
 
 export function DayCalendar(props: {
   date: string;
@@ -65,10 +57,6 @@ export function DayCalendar(props: {
     return { m, unassigned };
   }, [items, staff]);
 
-  const visitItems = useMemo(() => {
-    if (!selectedVisit) return [];
-    return items.filter((i) => i.visit_id === selectedVisit);
-  }, [items, selectedVisit]);
 
 
   function onSlotClick(staffId: string | null, minute: number) {
@@ -163,7 +151,10 @@ export function DayCalendar(props: {
                     className="absolute left-1 right-1 rounded-lg text-left px-2 py-1 overflow-hidden shadow-card border"
                     style={{
                       top, height: h,
-                      background: it.status === "completed" || it.status === "arrived" ? "var(--good-bg)" : it.status === "pending" ? "var(--warn-bg)" : it.status === "no_show" ? "var(--bad-bg)" : "var(--surface)",
+                      background: it.status === "no_show" ? "var(--bad-bg)" : it.visit.color ? `color-mix(in srgb, ${it.visit.color} 45%, var(--surface))` : it.status === "completed" || it.status === "arrived" ? "var(--good-bg)" : it.status === "pending" ? "var(--warn-bg)" : "var(--surface)",
+                      backgroundImage: it.break_min > 0 ? `repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--muted) 25%, transparent) 5px 7px)` : undefined,
+                      backgroundSize: it.break_min > 0 ? `100% ${it.break_min * PX_PER_MIN}px` : undefined,
+                      backgroundPosition: "bottom", backgroundRepeat: "no-repeat",
                       borderColor: col.color, borderLeftWidth: 4,
                     }}
                     title={`${fmtTime(it.starts_at)}–${fmtTime(it.ends_at)} ${it.service_name}`}
@@ -181,22 +172,16 @@ export function DayCalendar(props: {
       </div>
 
       {selectedVisit && (
-        <VisitCard
-          items={visitItems}
-          date={date}
+        <VisitEditor
+          key={selectedVisit}
+          visitId={selectedVisit}
           staff={staff}
+          services={props.services}
+          categories={props.categories}
+          openTime={settings.open_time}
+          closeTime={settings.close_time}
           canWrite={canWrite}
           onClose={() => setSelectedVisit(null)}
-          onAdd={() => {
-            const v = visitItems[0];
-            const c = v?.visit.customer;
-            setDraft({
-              staffId: v?.staff_id ?? null,
-              startHHMM: v ? hhmm(minutesOfDay(v.ends_at)) : hhmm(openMin),
-              visitId: selectedVisit,
-              customer: c ? { id: c.id, first_name: c.first_name, last_name: c.last_name, phone: c.phone } : undefined,
-            });
-          }}
         />
       )}
 
@@ -223,88 +208,6 @@ function toMin(t: string) {
 
 /* ---------------------------------------------------------------
    Ziyaret kartı: müşterinin o günkü TÜM hizmetleri + toplam
-   --------------------------------------------------------------- */
-function VisitCard(props: { items: DayItem[]; date: string; staff: Staff[]; canWrite: boolean; onClose: () => void; onAdd: () => void }) {
-  const { items, staff, canWrite } = props;
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [err, setErr] = useState("");
-  const [closing, setClosing] = useState<DayVisit | null>(null);
-  const v = items[0]?.visit;
-  const c = v?.customer;
-  const active = items.filter((i) => i.status !== "cancelled").sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-  const subtotal = active.reduce((s, i) => s + Number(i.price) - Number(i.discount), 0);
-  const total = Math.round(subtotal * (1 - Number(v?.discount_percent ?? 0) / 100));
-  const staffName = (id: string | null) => staff.find((s) => s.id === id)?.full_name ?? "—";
-
-  function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
-    setErr("");
-    start(async () => {
-      const r = await fn();
-      if (!r.ok) setErr(r.error ?? "Hata");
-      else router.refresh();
-    });
-  }
-
-  if (!v) return null;
-  return (
-    <Modal onClose={props.onClose} title={c ? fullName(c) : "Müşterisiz ziyaret"}>
-      <div className="grid gap-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          {c && (
-            <>
-              <span className="w-10 h-10 rounded-full bg-green-soft text-green grid place-items-center font-bold">{initials(c.first_name, c.last_name)}</span>
-              <div className="min-w-0">
-                <a className="font-semibold hover:underline" href={`/panel/musteriler/${c.id}`}>{fullName(c)}</a>
-                <div className="text-sm text-muted">{c.phone || "telefon yok"}{c.no_show_count > 0 && <span className="pill bad ml-2">{c.no_show_count} gelmedi</span>}</div>
-              </div>
-            </>
-          )}
-          <span className={`pill ${STATUS_CLASS[v.status]} ml-auto`}>{STATUS_LABEL[v.status]}</span>
-        </div>
-
-        <div className="eyebrow">Bugünkü hizmetler ({active.length})</div>
-        <div className="grid gap-2">
-          {active.map((i) => (
-            <div key={i.id} className="grid grid-cols-[auto_1fr_auto] gap-3 items-center rounded-xl bg-sunk px-3 py-2">
-              <div className="num text-sm font-bold">{fmtTime(i.starts_at)}<div className="text-[11px] text-muted font-semibold">{duration(Math.round((new Date(i.ends_at).getTime() - new Date(i.starts_at).getTime()) / 60000))}</div></div>
-              <div className="min-w-0">
-                <div className="font-semibold truncate">{i.service_name}</div>
-                <div className="text-xs text-muted truncate">{staffName(i.staff_id)}{i.notes ? ` · ${i.notes}` : ""}</div>
-              </div>
-              <div className="text-right">
-                <div className="num font-bold">{money(Number(i.price) - Number(i.discount))}</div>
-                {canWrite && (
-                  <button className="text-[11px] text-bad hover:underline" disabled={pending} onClick={() => { if (confirm("Bu hizmet kalemi silinsin mi?")) run(() => deleteItem(i.id)); }}>sil</button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-baseline justify-between border-t border-ink pt-2">
-          <div className="text-sm text-muted">{v.discount_percent > 0 ? `Ara toplam ${money(subtotal)} · %${v.discount_percent} indirim` : "Toplam"}</div>
-          <div className="num text-2xl font-bold font-display">{money(total)}</div>
-        </div>
-        {v.notes && <p className="text-sm"><span className="text-muted">Not:</span> {v.notes}</p>}
-        {err && <p className="pill bad">{err}</p>}
-        {canWrite && (
-          <div className="flex gap-2 flex-wrap">
-            <button className="btn" onClick={props.onAdd}>+ Hizmet ekle</button>
-            {v.status !== "completed" && <button className="btn ghost" disabled={pending} onClick={() => { setErr(""); start(async () => { const r = await loadVisitForClose(v.id); if (!r.ok) setErr(r.error); else setClosing(r.visit); }); }}>₺ Ödeme al</button>}
-            {v.status !== "arrived" && v.status !== "completed" && <button className="btn ghost" disabled={pending} onClick={() => run(() => setVisitStatus(v.id, "arrived"))}>Geldi</button>}
-            {v.status !== "completed" && <button className="btn ghost" disabled={pending} onClick={() => run(() => setVisitStatus(v.id, "completed"))}>Tamamlandı</button>}
-            {v.status !== "no_show" && <button className="btn ghost" disabled={pending} onClick={() => run(() => setVisitStatus(v.id, "no_show"))}>Gelmedi</button>}
-            <button className="btn danger ml-auto" disabled={pending} onClick={() => { if (confirm("Ziyaretin tamamı iptal edilsin mi?")) run(() => setVisitStatus(v.id, "cancelled")); }}>İptal</button>
-          </div>
-        )}
-      </div>
-      {closing && <CloseDialog v={closing} staffName={staffName} onClose={() => setClosing(null)} onDone={() => { setClosing(null); props.onClose(); router.refresh(); }} />}
-    </Modal>
-  );
-}
-
-/* ---------------------------------------------------------------
-   Yeni hizmet kalemi
    --------------------------------------------------------------- */
 function NewItemDialog(props: {
   date: string;
