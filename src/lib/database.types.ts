@@ -55,12 +55,13 @@ export type Customer = {
 export type Visit = {
   id: string; customer_id: string | null; visit_date: string; status: VisitStatus; source: VisitSource;
   notes: string; internal_notes: string; discount_percent: number; prepaid_amount: number; created_by: string | null; import_ref: string | null;
+  color: string; is_anonymous: boolean; remind_offsets: number[]; remind_confirm: boolean; review_request: string; promo_code: string;
 } & Timestamps;
 
 export type VisitItem = {
   id: string; visit_id: string; service_id: string | null; service_name: string; staff_id: string | null;
   resource_id: string | null; starts_at: string; ends_at: string; price: number; discount: number;
-  status: VisitStatus; package_id: string | null; notes: string;
+  status: VisitStatus; package_id: string | null; notes: string; break_min: number;
 } & Timestamps;
 
 export type CustomerPackage = {
@@ -93,6 +94,9 @@ export type Product = {
   stock_qty: number; min_stock: number; is_retail: boolean; is_active: boolean; notes: string;
 } & Timestamps;
 export type StockMove = { id: string; product_id: string; kind: "purchase" | "sale" | "use" | "adjust" | "return"; qty: number; unit_cost: number | null; note: string; sale_id: string | null; staff_id: string | null; created_by: string | null; created_at: string };
+export type PromoCode = { code: string; percent: number; description: string; valid_until: string | null; is_active: boolean; created_at: string };
+export type VisitFile = { id: string; visit_id: string; customer_id: string | null; storage_path: string; file_name: string; mime: string; size_bytes: number; created_by: string | null; created_at: string };
+export type AuditLog = { id: number; actor_id: string | null; action: string; entity: string; entity_id: string | null; diff: unknown; created_at: string };
 export type BalanceLedger = { id: string; customer_id: string; amount: number; reason: string; sale_id: string | null; created_by: string | null; created_at: string };
 export type LoyaltyLedger = { id: string; customer_id: string; points: number; reason: string; sale_id: string | null; created_at: string };
 export type MessageTemplate = { kind: string; locale: string; body: string; updated_at: string };
@@ -129,7 +133,7 @@ export type Database = {
       service_resources: { Row: { service_id: string; resource_id: string }; Insert: { service_id: string; resource_id: string }; Update: Partial<{ service_id: string; resource_id: string }>; Relationships: [] };
       customers: Tbl<Customer, Exclude<keyof Customer, "first_name">>;
       visits: Tbl<Visit, Exclude<keyof Visit, "visit_date">, [R<"visits_customer_id_fkey","customer_id","customers">]>;
-      visit_items: Tbl<VisitItem, "service_id" | "staff_id" | "resource_id" | "price" | "discount" | "status" | "package_id" | "notes", [R<"visit_items_visit_id_fkey","visit_id","visits">, R<"visit_items_staff_id_fkey","staff_id","staff">, R<"visit_items_service_id_fkey","service_id","services">]>;
+      visit_items: Tbl<VisitItem, "service_id" | "staff_id" | "resource_id" | "price" | "discount" | "status" | "package_id" | "notes" | "break_min", [R<"visit_items_visit_id_fkey","visit_id","visits">, R<"visit_items_staff_id_fkey","staff_id","staff">, R<"visit_items_service_id_fkey","service_id","services">]>;
       customer_packages: Tbl<CustomerPackage, "service_id" | "used_sessions" | "price_paid" | "purchased_at" | "expires_at" | "notes" | "sale_id" | "is_active", [R<"customer_packages_customer_id_fkey","customer_id","customers">]>;
       expenses: Tbl<Expense, "expense_date" | "category" | "description" | "method" | "staff_id" | "created_by", [R<"expenses_staff_id_fkey","staff_id","staff">]>;
       sales: Tbl<Sale, "visit_id" | "customer_id" | "sale_date" | "subtotal" | "discount" | "total" | "notes" | "created_by", [R<"sales_visit_id_fkey","visit_id","visits">, R<"sales_customer_id_fkey","customer_id","customers">]>;
@@ -140,6 +144,9 @@ export type Database = {
       gift_card_uses: Tbl<GiftCardUse, "sale_id", [R<"gift_card_uses_gift_card_id_fkey","gift_card_id","gift_cards">]>;
       products: Tbl<Product, Exclude<keyof Product, "name">>;
       stock_moves: Tbl<StockMove, "unit_cost" | "note" | "sale_id" | "staff_id" | "created_by", [R<"stock_moves_product_id_fkey","product_id","products">, R<"stock_moves_staff_id_fkey","staff_id","staff">]>;
+      promo_codes: { Row: PromoCode; Insert: Partial<PromoCode> & { code: string; percent: number }; Update: Partial<PromoCode>; Relationships: [] };
+      visit_files: Tbl<VisitFile, "customer_id" | "mime" | "size_bytes" | "created_by", [R<"visit_files_visit_id_fkey","visit_id","visits">]>;
+      audit_log: { Row: AuditLog; Insert: { actor_id?: string | null; action: string; entity: string; entity_id?: string | null; diff?: unknown }; Update: Partial<AuditLog>; Relationships: [] };
       balance_ledger: Tbl<BalanceLedger, "reason" | "sale_id" | "created_by", [R<"balance_ledger_customer_id_fkey","customer_id","customers">]>;
       loyalty_ledger: Tbl<LoyaltyLedger, "reason" | "sale_id", [R<"loyalty_ledger_customer_id_fkey","customer_id","customers">]>;
       message_templates: { Row: MessageTemplate; Insert: { kind: string; locale: string; body: string; updated_at?: string }; Update: Partial<MessageTemplate>; Relationships: [] };
