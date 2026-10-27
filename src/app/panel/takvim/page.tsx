@@ -14,10 +14,13 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
   const { supabase, profile } = await requireSession();
   const monthStart = d.slice(0, 7) + "-01";
   const monthEnd = new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0)).toISOString().slice(0, 10);
-  const [day, picker, kasa, { data: monthVisits }] = await Promise.all([
+  const [day, picker, kasa, { data: monthVisits }, { data: ssRows }] = await Promise.all([
     loadDay(supabase, d), loadServicesForPicker(supabase), loadKasaDay(supabase, d),
     supabase.from("visits").select("visit_date").gte("visit_date", monthStart).lte("visit_date", monthEnd).neq("status", "cancelled"),
+    supabase.from("staff_services").select("staff_id, service_id"),
   ]);
+  const staffServices: Record<string, string[]> = {};
+  for (const r of ssRows ?? []) (staffServices[r.staff_id] ??= []).push(r.service_id);
   const sum = summarize(kasa.visits, kasa.expenses, Number(kasa.settings.kdv_rate), kasa.otherSales);
   const busyDays = new Set((monthVisits ?? []).map((v) => v.visit_date));
   const canWrite = !!profile && ["owner", "manager", "reception"].includes(profile.role);
@@ -42,6 +45,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           settings={{ open_time: day.settings.open_time, close_time: day.settings.close_time, slot_minutes: day.settings.slot_minutes }}
           services={picker.services}
           categories={picker.categories}
+          staffServices={staffServices}
           canWrite={canWrite}
         />
         <aside className="grid gap-3 lg:sticky lg:top-3 min-w-0">

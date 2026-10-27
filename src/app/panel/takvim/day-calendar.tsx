@@ -21,6 +21,7 @@ export function DayCalendar(props: {
   timeOff: { staff_id: string; starts_at: string; ends_at: string; reason: string }[];
   settings: { open_time: string; close_time: string; slot_minutes: number };
   services: ServiceLite[];
+  staffServices: Record<string, string[]>;
   categories: CategoryLite[];
   canWrite: boolean;
 }) {
@@ -178,6 +179,7 @@ export function DayCalendar(props: {
           staff={staff}
           services={props.services}
           categories={props.categories}
+          staffServices={props.staffServices}
           openTime={settings.open_time}
           closeTime={settings.close_time}
           canWrite={canWrite}
@@ -192,6 +194,7 @@ export function DayCalendar(props: {
           staff={staff}
           services={props.services}
           categories={props.categories}
+          staffServices={props.staffServices}
           slotMinutes={settings.slot_minutes}
           onClose={() => setDraft(null)}
           onCreated={(visitId) => { setDraft(null); setSelectedVisit(visitId); }}
@@ -215,6 +218,7 @@ function NewItemDialog(props: {
   staff: Staff[];
   services: ServiceLite[];
   categories: CategoryLite[];
+  staffServices: Record<string, string[]>;
   slotMinutes: number;
   onClose: () => void;
   onCreated: (visitId: string) => void;
@@ -234,11 +238,13 @@ function NewItemDialog(props: {
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
+    const allowed = staffId && props.staffServices[staffId]?.length ? new Set(props.staffServices[staffId]) : null;
     return props.services
+      .filter((s) => !allowed || allowed.has(s.id))
       .filter((s) => !cat || s.category_id === cat)
       .filter((s) => !t || s.name_tr.toLowerCase().includes(t) || s.name_en.toLowerCase().includes(t) || (s.code ?? "").includes(t))
       .slice(0, 60);
-  }, [props.services, q, cat]);
+  }, [props.services, props.staffServices, staffId, q, cat]);
 
   const service = props.services.find((s) => s.id === serviceId);
 

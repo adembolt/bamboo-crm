@@ -3,12 +3,15 @@ import { useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import type { Staff } from "@/lib/database.types";
 import { saveStaff } from "./actions";
-import { Modal } from "@/app/panel/takvim/day-calendar";
+import { Modal } from "@/components/modal";
+import { StaffServicesDialog } from "./staff-services";
 
 const PAY: Record<Staff["pay_model"], string> = { daily_prim: "Günlük prim", percent: "Ay sonu yüzde", fixed: "Sabit" };
 
-export function StaffList({ staff, canManage }: { staff: Staff[]; canManage: boolean }) {
+type Svc = { id: string; category_id: string | null; code: string | null; name_tr: string; duration_min: number; price: number };
+export function StaffList({ staff, canManage, services, categories, assigned }: { staff: Staff[]; canManage: boolean; services: Svc[]; categories: { id: string; name_tr: string; sort_order: number }[]; assigned: Record<string, string[]> }) {
   const [edit, setEdit] = useState<Staff | "new" | null>(null);
+  const [svcFor, setSvcFor] = useState<Staff | null>(null);
   const router = useRouter();
   return (
     <div className="grid gap-4">
@@ -26,10 +29,14 @@ export function StaffList({ staff, canManage }: { staff: Staff[]; canManage: boo
               <span className={`pill ${s.online_bookable ? "good" : ""}`}>{s.online_bookable ? "Online seçilebilir" : "Online kapalı"}</span>
               {!s.is_active && <span className="pill bad">Pasif</span>}
             </div>
+            <button type="button" className="btn ghost sm justify-self-start" disabled={!canManage} onClick={() => setSvcFor(s)} title="Bu uzmanın yapabildiği hizmetler">
+              ✦ Hizmetler: {assigned[s.id]?.length ? `${assigned[s.id].length} hizmet` : "atanmamış (tümü açık)"}
+            </button>
           </div>
         ))}
         {!staff.length && <p className="text-muted text-sm">Henüz personel yok.</p>}
       </div>
+      {svcFor && <StaffServicesDialog staffId={svcFor.id} staffName={svcFor.full_name} services={services} categories={categories} assigned={assigned[svcFor.id] ?? []} onClose={() => setSvcFor(null)} />}
       {edit && <StaffForm staff={edit === "new" ? null : edit} onClose={() => { setEdit(null); router.refresh(); }} />}
     </div>
   );

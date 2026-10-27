@@ -27,7 +27,7 @@ const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h
 const r2 = (n: number) => Math.round(n * 100) / 100;
 let seq = 0; const k = () => `n${++seq}`;
 
-export function VisitEditor(props: { visitId: string; staff: Staff[]; services: Svc[]; categories: Cat[]; openTime: string; closeTime: string; canWrite: boolean; onClose: () => void }) {
+export function VisitEditor(props: { visitId: string; staff: Staff[]; services: Svc[]; categories: Cat[]; staffServices: Record<string, string[]>; openTime: string; closeTime: string; canWrite: boolean; onClose: () => void }) {
   const { visitId, staff, services, categories, canWrite, onClose } = props;
   const router = useRouter();
   const [d, setD] = useState<Detail | null>(null);
@@ -79,6 +79,8 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
 
   const sale = d?.sale ?? null;
   const locked = !canWrite || !!sale;
+  const servicesFor = (staffId: string | null) => { const a = staffId ? props.staffServices[staffId] : undefined; return a?.length ? services.filter((s) => a.includes(s.id) || s.id === lines.find((l) => l.staffId === staffId)?.serviceId) : services; };
+  const notAllowed = (l: Line) => !!(l.staffId && l.serviceId && props.staffServices[l.staffId]?.length && !props.staffServices[l.staffId].includes(l.serviceId));
   const svcById = useMemo(() => new Map(services.map((s) => [s.id, s])), [services]);
   const myIds = new Set(lines.map((l) => l.id).filter(Boolean) as string[]);
   const lineTotal = (l: Line) => Math.max(0, (Number(l.price) || 0) - (Number(l.discAmt) || 0));
@@ -193,7 +195,7 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
               <div className="grid grid-cols-6 lg:grid-cols-[1.5fr_84px_2.2fr_92px_90px_64px_80px_90px_28px] gap-2 items-center rounded-xl lg:rounded-none bg-sunk/40 lg:bg-transparent p-2 lg:p-0">
                 <span className="inp col-span-3 lg:col-span-1 order-first lg:order-none"><select aria-label="Uzman" value={l.staffId ?? ""} disabled={locked} onChange={(e) => setLine(l.key, { staffId: e.target.value || null })}><option value="">— atanmamış —</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></span>
                 <span className="inp col-span-1 order-first lg:order-none"><input aria-label="Saat" type="time" step={300} value={l.time} disabled={locked} onChange={(e) => setLine(l.key, { time: e.target.value })} /></span>
-                <div className="col-span-6 lg:col-span-1 min-w-0"><ServiceCombobox services={services} categories={categories} value={l.serviceId} label={l.serviceName} disabled={locked} onPick={(id) => pickService(l.key, id)} /></div>
+                <div className="col-span-6 lg:col-span-1 min-w-0"><ServiceCombobox services={servicesFor(l.staffId)} categories={categories} value={l.serviceId} label={l.serviceName} disabled={locked} onPick={(id) => pickService(l.key, id)} /></div>
                 <span className="inp col-span-2 lg:col-span-1 order-first lg:order-none"><select aria-label="Süre" value={l.duration} disabled={locked} onChange={(e) => setLine(l.key, { duration: e.target.value })}>{[...new Set([...DURS, Number(l.duration) || 60])].sort((a, b) => a - b).map((m) => <option key={m} value={m}>{m >= 60 ? `${Math.floor(m / 60)} sa${m % 60 ? ` ${m % 60}` : ""}` : `${m} dk`}</option>)}</select></span>
                 <span className="inp col-span-2 lg:col-span-1"><input aria-label="Fiyat" inputMode="decimal" className="text-right" value={l.price} disabled={locked} onChange={(e) => setPrice(l.key, e.target.value)} /></span>
                 <span className="inp"><input aria-label="İndirim yüzde" inputMode="decimal" className="text-right" value={l.discPct} disabled={locked} onChange={(e) => setPct(l.key, e.target.value)} /></span>
@@ -202,6 +204,7 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
                 {!locked && lines.length > 1 ? <button type="button" className="btn ghost sm px-1" aria-label="Satırı kaldır" onClick={() => setLines(lines.filter((x) => x.key !== l.key))}>✕</button> : <span />}
               </div>
               {l.packageId && <span className="text-[11px] text-good">Paketten düşüldü</span>}
+              {notAllowed(l) && <span className="text-xs text-warn">Bu uzmanın hizmet listesinde bu işlem yok (Personel → Hizmetler).</span>}
               {fi && <span className={`text-xs ${fi.bad ? "text-bad" : "text-good"}`}>{fi.text}</span>}
             </div>
           ); })}
