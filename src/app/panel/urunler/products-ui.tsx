@@ -171,12 +171,12 @@ function SellDialog({ products, staff, onClose }: { products: Prod[]; staff: { i
   const [lines, setLines] = useState<{ productId: string; qty: string; price: string }[]>([{ productId: "", qty: "1", price: "" }]);
   const total = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
   const [pays, setPays] = useState<{ method: PayMethod; amount: string }[]>([{ method: "cash", amount: "" }]);
-  const paid = pays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const effPays = pays.length === 1 && pays[0].amount.trim() === "" ? [{ ...pays[0], amount: String(total) }] : pays; const paid = effPays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const remaining = Math.round((total - paid) * 100) / 100;
   const setLine = (k: number, patch: Partial<{ productId: string; qty: string; price: string }>) => setLines(lines.map((x, j) => (j === k ? { ...x, ...patch } : x)));
   const setPay = (i: number, patch: Partial<{ method: PayMethod; amount: string }>) => setPays(pays.map((p, k) => (k === i ? { ...p, ...patch } : p)));
   const submit = () => { setErr(""); start(async () => {
-    const r = await sellProducts({ customerId: customer?.id ?? null, saleDate: todayIso(), lines: lines.map((l) => ({ productId: l.productId, qty: Number(l.qty) || 0, unitPrice: Number(l.price) || 0, staffId: staffId || null })), payments: pays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0 })) });
+    const r = await sellProducts({ customerId: customer?.id ?? null, saleDate: todayIso(), lines: lines.map((l) => ({ productId: l.productId, qty: Number(l.qty) || 0, unitPrice: Number(l.price) || 0, staffId: staffId || null })), payments: effPays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0 })) });
     if (!r.ok) setErr(r.error); else { onClose(); router.refresh(); }
   }); };
   return (

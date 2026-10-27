@@ -38,7 +38,9 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
     for (const i of items) { if (n[i.id] || left <= 0) continue; if (!p.service_id || p.service_id === i.service_id) { n[i.id] = pid; left--; } }
     setPkgUse(n);
   }
-  const paid = pays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  // Tek ödeme satırı boş bırakılırsa toplamın tamamı o yöntemle ödenmiş sayılır
+  const effPays = pays.length === 1 && pays[0].amount.trim() === "" ? [{ ...pays[0], amount: String(total) }] : pays;
+  const paid = effPays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const remaining = total - paid;
 
   function setPay(i: number, patch: Partial<{ method: PayMethod; amount: string; ref: string }>) { setPays(pays.map((p, k) => (k === i ? { ...p, ...patch } : p))); }
@@ -49,7 +51,7 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
     start(async () => {
       const r = await closeVisit({
         visitId: v.id, discountPercent: Number(disc) || 0,
-        payments: pays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0, ref: p.ref })),
+        payments: effPays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0, ref: p.ref })),
         itemOverrides: Object.fromEntries(items.map((i) => [i.id, Number(prices[i.id]) || 0])),
         packageUse: pkgUse,
         products: prodLines.filter((l) => l.productId && Number(l.qty) > 0).map((l) => ({ productId: l.productId, qty: Number(l.qty), unitPrice: Number(l.price) || 0, staffId: sellerId })),

@@ -15,7 +15,8 @@ export function TopUpDialog({ customerId, customerName, balance, onClose, onDone
   const [note, setNote] = useState("");
   const [pays, setPays] = useState<{ method: PayMethod; amount: string }[]>([{ method: "cash", amount: "" }]);
   const total = Number(amount) || 0;
-  const paid = pays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const effPays = pays.length === 1 && pays[0].amount.trim() === "" ? [{ ...pays[0], amount: String(total) }] : pays;
+  const paid = effPays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const remaining = Math.round((total - paid) * 100) / 100;
   const setPay = (i: number, patch: Partial<{ method: PayMethod; amount: string }>) => setPays(pays.map((p, k) => (k === i ? { ...p, ...patch } : p)));
   return (
@@ -36,7 +37,7 @@ export function TopUpDialog({ customerId, customerName, balance, onClose, onDone
         <label className="f">Not (isteğe bağlı)<span className="inp"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="ör. 10 seans masaj için ön ödeme" /></span></label>
         {err && <p className="pill bad">{err}</p>}
         <div className="flex justify-end gap-2"><button className="btn ghost" onClick={onClose}>Vazgeç</button>
-          <button className="btn" disabled={pending || !(total > 0) || Math.abs(remaining) >= 0.5} onClick={() => { setErr(""); start(async () => { const r = await topUpBalance({ customerId, amount: total, saleDate: todayIso(), notes: note || undefined, payments: pays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0 })) }); if (!r.ok) setErr(r.error); else onDone(total); }); }}>{pending ? "…" : `${money(total)} yükle`}</button></div>
+          <button className="btn" disabled={pending || !(total > 0) || Math.abs(remaining) >= 0.5} onClick={() => { setErr(""); start(async () => { const r = await topUpBalance({ customerId, amount: total, saleDate: todayIso(), notes: note || undefined, payments: effPays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0 })) }); if (!r.ok) setErr(r.error); else onDone(total); }); }}>{pending ? "…" : `${money(total)} yükle`}</button></div>
       </div>
     </Modal>
   );

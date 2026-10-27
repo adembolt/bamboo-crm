@@ -19,7 +19,7 @@ export function BalancePanel({ customerId, balance, canWrite, isManager, ledger 
   const [amount, setAmount] = useState("");
   const [pays, setPays] = useState<{ method: PayMethod; amount: string }[]>([{ method: "cash", amount: "" }]);
   const [delta, setDelta] = useState(""); const [reason, setReason] = useState("");
-  const total = Number(amount) || 0; const paid = pays.reduce((s, p) => s + (Number(p.amount) || 0), 0); const remaining = total - paid;
+  const total = Number(amount) || 0; const effPays = pays.length === 1 && pays[0].amount.trim() === "" ? [{ ...pays[0], amount: String(total) }] : pays; const paid = effPays.reduce((s, p) => s + (Number(p.amount) || 0), 0); const remaining = total - paid;
   const setPay = (i: number, patch: Partial<{ method: PayMethod; amount: string }>) => setPays(pays.map((p, k) => (k === i ? { ...p, ...patch } : p)));
   return (
     <section className="panel grid gap-2">
@@ -45,7 +45,7 @@ export function BalancePanel({ customerId, balance, canWrite, isManager, ledger 
             ))}
             <div className="flex gap-2 items-center"><button type="button" className="btn ghost sm" onClick={() => setPays([...pays, { method: "card", amount: "" }])}>+ Karışık ödeme</button><span className={`ml-auto text-sm num ${Math.abs(remaining) < 0.5 ? "text-good" : "text-bad"}`}>{Math.abs(remaining) < 0.5 ? "Tutar eşleşti" : `Kalan ${money(remaining)}`}</span></div>
             {err && <p className="pill bad">{err}</p>}
-            <div className="flex justify-end gap-2"><button className="btn ghost" onClick={() => setOpen(false)}>Vazgeç</button><button className="btn" disabled={pending || !(total > 0) || Math.abs(remaining) >= 0.5} onClick={() => { setErr(""); start(async () => { const r = await topUpBalance({ customerId, amount: total, saleDate: todayIso(), payments: pays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0 })) }); if (!r.ok) setErr(r.error); else { setOpen(false); setAmount(""); router.refresh(); } }); }}>{pending ? "…" : "Yükle ve kasaya işle"}</button></div>
+            <div className="flex justify-end gap-2"><button className="btn ghost" onClick={() => setOpen(false)}>Vazgeç</button><button className="btn" disabled={pending || !(total > 0) || Math.abs(remaining) >= 0.5} onClick={() => { setErr(""); start(async () => { const r = await topUpBalance({ customerId, amount: total, saleDate: todayIso(), payments: effPays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0 })) }); if (!r.ok) setErr(r.error); else { setOpen(false); setAmount(""); router.refresh(); } }); }}>{pending ? "…" : "Yükle ve kasaya işle"}</button></div>
           </div>
         </Modal>
       )}
@@ -108,12 +108,12 @@ function SellDialog({ customerId, services, staff, defaultMonths, onClose, onDon
   const [staffId, setStaffId] = useState("");
   const [pays, setPays] = useState<{ method: PayMethod; amount: string; ref?: string }[]>([{ method: "cash", amount: "" }]);
   const total = Number(price) || 0;
-  const paid = pays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const effPays = pays.length === 1 && pays[0].amount.trim() === "" ? [{ ...pays[0], amount: String(total) }] : pays; const paid = effPays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const remaining = total - paid;
   const list = q.length < 2 ? services.filter((s) => s.session_count > 1 || s.kind === "package").slice(0, 12) : services.filter((s) => s.name_tr.toLocaleLowerCase("tr").includes(q.toLocaleLowerCase("tr"))).slice(0, 12);
   const pick = (s: Svc) => { setSvc(s); setQ(""); if (!name) setName(s.name_tr); if (s.session_count > 1) setSessions(String(s.session_count)); if (!price) setPrice(String(Math.round(Number(s.price) * (s.session_count > 1 ? 1 : Number(sessions) * 0.9)))); };
   const setPay = (i: number, patch: Partial<{ method: PayMethod; amount: string; ref: string }>) => setPays(pays.map((p, k) => (k === i ? { ...p, ...patch } : p)));
-  const submit = () => { setErr(""); start(async () => { const r = await sellPackage({ customerId, serviceId: svc?.id ?? null, name, sessions: Number(sessions) || 0, price: total, expiresAt: expires || null, staffId: staffId || null, saleDate: todayIso(), payments: pays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0, ref: p.ref })) }); if (!r.ok) setErr(r.error); else onDone(); }); };
+  const submit = () => { setErr(""); start(async () => { const r = await sellPackage({ customerId, serviceId: svc?.id ?? null, name, sessions: Number(sessions) || 0, price: total, expiresAt: expires || null, staffId: staffId || null, saleDate: todayIso(), payments: effPays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0, ref: p.ref })) }); if (!r.ok) setErr(r.error); else onDone(); }); };
   return (
     <Modal title="Seans paketi sat" onClose={onClose}>
       <div className="grid gap-3">
