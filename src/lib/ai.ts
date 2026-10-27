@@ -5,14 +5,14 @@ const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
 
 export function aiEnabled() { return !!process.env.ANTHROPIC_API_KEY; }
 
-export async function complete(opts: { system: string; user: string; maxTokens?: number; temperature?: number }): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+export async function complete(opts: { system: string; user: string; maxTokens?: number }): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   const key = (process.env.ANTHROPIC_API_KEY ?? "").trim().replace(/^["']|["']$/g, "");
   if (!key) return { ok: false, error: "Yapay zekâ kapalı: Vercel'de ANTHROPIC_API_KEY tanımlı değil." };
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: MODEL, max_tokens: opts.maxTokens ?? 400, temperature: opts.temperature ?? 0.7, system: opts.system, messages: [{ role: "user", content: opts.user }] }),
+      body: JSON.stringify({ model: MODEL, max_tokens: opts.maxTokens ?? 400, system: opts.system, messages: [{ role: "user", content: opts.user }] }),
       signal: AbortSignal.timeout(25000),
     });
     const j = (await r.json()) as { content?: { type: string; text?: string }[]; error?: { message?: string } };
