@@ -57,10 +57,12 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
   const [closing, setClosing] = useState<DayVisit | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async () => {
+  // resetForm=false: yalnızca ek bilgileri (dosyalar, geçmiş, mesajlar) yeniler; kaydedilmemiş form değişikliklerine dokunmaz
+  const load = useCallback(async (resetForm = true) => {
     const r = await getVisitDetail(visitId);
     if (!r.ok) { setLoadErr(r.error); return; }
     setD(r);
+    if (!resetForm) return;
     const v = r.visit;
     setDate(v.date); setStatus(v.status); setNotes(v.notes ?? ""); setColor(v.color ?? ""); setAnon(v.isAnonymous);
     setRemind(v.remindOffsets ?? []); setRemindConfirm(v.remindConfirm); setReview(v.reviewRequest || "auto"); setPromo(v.promoCode ?? "");
@@ -142,13 +144,13 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
     });
   }
   function flag(s: VisitStatus) {
-    setErr(""); start(async () => { const r = await setVisitFlag(visitId, s); if (!r.ok) setErr(r.error); else { setStatus(s); router.refresh(); await load(); } });
+    setErr(""); start(async () => { const r = await setVisitFlag(visitId, s); if (!r.ok) setErr(r.error); else { setStatus(s); router.refresh(); await load(false); } });
   }
   function createSale() {
     save(async () => { const r = await loadVisitForClose(visitId); if (!r.ok) setErr(r.error); else setClosing(r.visit); });
   }
   function doRepeat() {
-    setErr(""); start(async () => { const r = await repeatVisit(visitId, repeatDate); if (!r.ok) setErr(r.error); else { setMsg(`Randevu ${fmtDate(r.date)} tarihine kopyalandı.`); setPanel(""); router.refresh(); await load(); } });
+    setErr(""); start(async () => { const r = await repeatVisit(visitId, repeatDate); if (!r.ok) setErr(r.error); else { setMsg(`Randevu ${fmtDate(r.date)} tarihine kopyalandı.`); setPanel(""); router.refresh(); await load(false); } });
   }
   function applyPromo() {
     setErr(""); setPromoInfo(""); start(async () => {
@@ -165,7 +167,7 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
     const { error } = await sb.storage.from("visit-files").upload(path, f, { contentType: f.type || undefined });
     if (error) { setErr("Yükleme başarısız: " + error.message); return; }
     const r = await addVisitFile({ visitId, customerId: d?.customer?.id ?? null, path, name: f.name, mime: f.type, size: f.size });
-    if (!r.ok) setErr(r.error); else await load();
+    if (!r.ok) setErr(r.error); else await load(false);
   }
 
   if (loadErr) return <Modal title="Randevu" onClose={onClose}><p className="pill bad">{loadErr}</p></Modal>;
@@ -302,7 +304,7 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
           {d.files.length > 0 && <div className="flex flex-wrap gap-2">{d.files.map((f) => (
             <span key={f.id} className="pill gap-2">
               {f.url ? <a href={f.url} target="_blank" rel="noreferrer" className="hover:underline">{f.file_name}</a> : f.file_name}
-              {canWrite && <button type="button" aria-label="Dosyayı sil" className="text-bad" onClick={() => { if (confirm(`${f.file_name} silinsin mi?`)) start(async () => { await deleteVisitFile(f.id); await load(); }); }}>✕</button>}
+              {canWrite && <button type="button" aria-label="Dosyayı sil" className="text-bad" onClick={() => { if (confirm(`${f.file_name} silinsin mi?`)) start(async () => { await deleteVisitFile(f.id); await load(false); }); }}>✕</button>}
             </span>
           ))}</div>}
         </div>
