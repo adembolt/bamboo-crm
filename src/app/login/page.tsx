@@ -27,6 +27,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         </label>
         {error && <p className="pill bad justify-center">{error}</p>}
         <button className="btn" type="submit">Giriş yap</button>
+        <a href="/sifremi-unuttum" className="text-sm text-center text-green font-semibold hover:underline">Şifremi unuttum</a>
       </form>
     </main>
   );

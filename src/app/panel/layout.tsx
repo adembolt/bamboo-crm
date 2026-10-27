@@ -20,6 +20,7 @@ export default async function PanelLayout({ children }: LayoutProps<"/panel">) {
           <div className="hidden md:block text-xs text-muted mb-1 truncate" title={user.email ?? ""}>
             {profile?.full_name || user.email}
           </div>
+          <a href="/sifre-yenile" className="hidden md:block text-[11px] text-muted hover:underline mb-1">Şifre değiştir</a>
           <button className="btn ghost sm w-full" type="submit">Çıkış</button>
         </form>
       </aside>
