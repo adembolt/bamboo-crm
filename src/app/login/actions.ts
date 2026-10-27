@@ -35,7 +35,9 @@ export async function requestReset(formData: FormData) {
   if (!email) redirect("/sifremi-unuttum?error=" + encodeURIComponent("E-posta gerekli"));
   // implicit akış: bağlantı hangi cihazda açılırsa açılsın çalışır (PKCE aynı tarayıcıyı ister)
   const sb = createJsClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false } });
-  await sb.auth.resetPasswordForEmail(email, { redirectTo: `${await origin()}/auth/recover` });
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: `${await origin()}/auth/recover` });
+  if (error && (error.status === 429 || /rate|limit|seconds/i.test(error.message)))
+    redirect("/sifremi-unuttum?error=" + encodeURIComponent("Çok fazla istek yapıldı. Supabase saatte en fazla 2 e-posta gönderiyor; lütfen bir saat sonra tekrar deneyin."));
   redirect("/sifremi-unuttum?sent=1");
 }
 
