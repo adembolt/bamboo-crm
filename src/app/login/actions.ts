@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createJsClient } from "@supabase/supabase-js";
 
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
@@ -32,8 +33,9 @@ async function origin() {
 export async function requestReset(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   if (!email) redirect("/sifremi-unuttum?error=" + encodeURIComponent("E-posta gerekli"));
-  const supabase = await createClient();
-  await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${await origin()}/auth/callback?next=/sifre-yenile` });
+  // implicit akış: bağlantı hangi cihazda açılırsa açılsın çalışır (PKCE aynı tarayıcıyı ister)
+  const sb = createJsClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false } });
+  await sb.auth.resetPasswordForEmail(email, { redirectTo: `${await origin()}/auth/recover` });
   redirect("/sifremi-unuttum?sent=1");
 }
 
