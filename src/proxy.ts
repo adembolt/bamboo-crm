@@ -18,9 +18,9 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims: JWT'yi yerelde doğrular (her istekte Auth sunucusuna gitmez); gerekirse oturumu yeniler
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims?.sub ? data.claims : null;
 
   const path = request.nextUrl.pathname;
   const isPanel = path.startsWith("/panel");

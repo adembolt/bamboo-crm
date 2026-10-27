@@ -6,8 +6,11 @@ import type { Profile } from "@/lib/database.types";
 
 export const getSession = cache(async () => {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  // getClaims: imzalı JWT yerelde doğrulanır → her sayfada Auth sunucusuna ayrıca gidilmez
+  const { data } = await supabase.auth.getClaims();
+  const c = data?.claims;
+  if (!c?.sub) return null;
+  const user = { id: c.sub, email: (c.email as string | undefined) ?? null };
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
   return { user, profile: (profile as Profile | null) ?? null, supabase };
 });
