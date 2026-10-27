@@ -41,7 +41,9 @@ export default async function MessagesPage({ searchParams }: PageProps<"/panel/m
       const services = its.map((i) => i.service_name).join(", ");
       const staffNames = [...new Set(its.map((i) => i.staff?.full_name).filter(Boolean))].join(", ");
       const total = its.reduce((a, i) => a + Number(i.price) - Number(i.discount), 0);
-      const body = fill(tpl(kind, loc), { ad: c.first_name, tarih: fmtForLocale(d, loc), saat: fmtTime(its[0].starts_at), hizmetler: services, personel: staffNames, toplam: money(total), salon, yorum_link: review });
+      let body = fill(tpl(kind, loc), { ad: c.first_name, tarih: fmtForLocale(d, loc), saat: fmtTime(its[0].starts_at), hizmetler: services, personel: staffNames, toplam: money(total), salon, yorum_link: review });
+      // Şablonda "yarın" sabit; seçilen gün yarın değilse kaldır (tarih zaten yazılı)
+      if (kind === "reminder" && d !== addDays(today, 1)) body = body.replace(d === today ? /\byarın\b/i : /\byarın\s+/i, d === today ? "bugün" : "").replace(d === today ? /\btomorrow\b/i : /\btomorrow,?\s*/i, d === today ? "today" : "").replace(d === today ? /завтра/i : /завтра,?\s*/i, d === today ? "сегодня" : "");
       rows.push({ id: visitId, customerId: c.id, visitId, name: fullName(c), phone: c.phone, locale: loc, meta: `${fmtTime(its[0].starts_at)} · ${services}${staffNames ? ` · ${staffNames}` : ""}`, body, href: waLink(c.phone, body), sentAt: logs?.find((l) => l.visit_id === visitId)?.sent_at ?? null, blocked: c.is_blocked });
     }
   } else if (kind === "birthday") {
