@@ -7,6 +7,7 @@ import { minutesOfDay, hhmm, money, fmtTime, fullName, duration } from "@/lib/fo
 import { addVisitItem, type NewItemInput } from "./actions";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
 import { VisitEditor } from "./visit-editor";
+import { StaffAvatar } from "@/components/staff-avatar";
 
 type ServiceLite = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en: string; duration_min: number; buffer_min: number; price: number; kind: string };
 type CategoryLite = { id: string; name_tr: string; sort_order: number; color: string };
@@ -22,6 +23,7 @@ export function DayCalendar(props: {
   settings: { open_time: string; close_time: string; slot_minutes: number };
   services: ServiceLite[];
   staffServices: Record<string, string[]>;
+  canManage?: boolean;
   categories: CategoryLite[];
   canWrite: boolean;
 }) {
@@ -67,11 +69,11 @@ export function DayCalendar(props: {
   }
 
   const visibleStaff = staff.filter((s) => !hidden.has(s.id));
-  const columns: { id: string | null; name: string; title: string; color: string; items: DayItem[] }[] = visibleStaff.map((s) => ({
-    id: s.id, name: s.full_name, title: s.title, color: s.color, items: byStaff.m.get(s.id) ?? [],
+  const columns: { id: string | null; name: string; title: string; color: string; photo: string | null; items: DayItem[] }[] = visibleStaff.map((s) => ({
+    id: s.id, name: s.full_name, title: s.title, color: s.color, photo: s.photo_url, items: byStaff.m.get(s.id) ?? [],
   }));
   const hiddenWithItems = staff.filter((s) => hidden.has(s.id) && (byStaff.m.get(s.id)?.length ?? 0) > 0);
-  if (byStaff.unassigned.length) columns.push({ id: null, name: "Atanmamış", title: "", color: "#9aa69c", items: byStaff.unassigned });
+  if (byStaff.unassigned.length) columns.push({ id: null, name: "Atanmamış", title: "", color: "#9aa69c", photo: null, items: byStaff.unassigned });
 
   return (
     <div className="panel p-0 overflow-hidden">
@@ -101,8 +103,8 @@ export function DayCalendar(props: {
           <div className="sticky top-0 z-10 bg-surface border-b border-line" />
           {columns.map((c) => (
             <div key={c.id ?? "none"} className="sticky top-0 z-10 bg-surface border-b border-l border-line px-2 py-2 min-w-0" title={c.name}>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full flex-none" style={{ background: c.color }} />
+              <div className="flex items-center gap-2">
+                {c.id ? <StaffAvatar staff={{ id: c.id, full_name: c.name, color: c.color, photo_url: c.photo }} size={34} editable={props.canManage} /> : <span className="w-2.5 h-2.5 rounded-full flex-none" style={{ background: c.color }} />}
                 <div className="min-w-0">
                   <div className="font-semibold truncate text-sm">{c.name}</div>
                   <div className="text-[11px] text-muted truncate">{c.title || `${c.items.length} randevu`}</div>

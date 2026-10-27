@@ -46,6 +46,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           services={picker.services}
           categories={picker.categories}
           staffServices={staffServices}
+          canManage={!!profile && ["owner", "manager"].includes(profile.role)}
           canWrite={canWrite}
         />
         <aside className="grid gap-3 lg:sticky lg:top-3 min-w-0">

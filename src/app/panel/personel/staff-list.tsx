@@ -5,6 +5,7 @@ import type { Staff } from "@/lib/database.types";
 import { saveStaff } from "./actions";
 import { Modal } from "@/components/modal";
 import { StaffServicesDialog } from "./staff-services";
+import { StaffAvatar } from "@/components/staff-avatar";
 
 const PAY: Record<Staff["pay_model"], string> = { daily_prim: "Günlük prim", percent: "Ay sonu yüzde", fixed: "Sabit" };
 
@@ -20,7 +21,7 @@ export function StaffList({ staff, canManage, services, categories, assigned }: 
         {staff.map((s) => (
           <div key={s.id} className={`panel grid gap-2 ${!s.is_active ? "opacity-60" : ""}`}>
             <div className="flex items-center gap-3">
-              <span className="w-10 h-10 rounded-full grid place-items-center font-bold text-white" style={{ background: s.color }}>{s.full_name.split(" ").map((p) => p[0]).join("").slice(0, 2)}</span>
+              <StaffAvatar staff={s} size={48} editable={canManage} />
               <div className="min-w-0"><div className="font-bold truncate">{s.full_name}</div><div className="text-xs text-muted">{s.title || "—"}</div></div>
               {canManage && <button className="btn ghost sm ml-auto" onClick={() => setEdit(s)}>Düzenle</button>}
             </div>

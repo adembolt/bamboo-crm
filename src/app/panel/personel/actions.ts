@@ -44,3 +44,12 @@ export async function setStaffServices(staffId: string, serviceIds: string[]) {
   revalidatePath("/panel/personel"); revalidatePath("/panel/takvim");
   return { ok: true as const, count: ids.length };
 }
+
+export async function setStaffPhoto(staffId: string, url: string | null) {
+  const { supabase } = await requireManager();
+  if (url && !/^https:\/\/[a-z0-9]+\.supabase\.co\/storage\/v1\/object\/public\/staff-photos\//.test(url)) return { ok: false as const, error: "Geçersiz adres." };
+  const { error } = await supabase.from("staff").update({ photo_url: url }).eq("id", staffId);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/panel/takvim"); revalidatePath("/panel/personel");
+  return { ok: true as const };
+}
