@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireOps, requireManager } from "@/lib/auth";
 import type { PayMethod } from "@/lib/database.types";
 import { loadKasaDay, type DayVisit } from "@/lib/queries/kasa";
+import { addProductLines, restockSale, type ProductLine } from "@/app/panel/urunler/actions";
 
 export type CloseVisitInput = {
   visitId: string;
@@ -11,6 +12,7 @@ export type CloseVisitInput = {
   notes?: string;
   itemOverrides?: Record<string, number>; // visit_item_id -> fiyat
   packageUse?: Record<string, string>;    // visit_item_id -> customer_package_id (paketten düş, fiyat 0)
+  products?: ProductLine[];               // ziyarete eklenen ürün satışları (indirim uygulanmaz)
 };
 
 /** Ziyareti kapatır: satış + kalemler + ödemeler oluşturur, ziyareti 'completed' yapar. */
@@ -57,8 +59,11 @@ export async function closeVisit(input: CloseVisitInput) {
   const pointValue = Number(settings?.loyalty_point_value ?? 1) || 1;
   const pointsNeeded = Math.ceil(pointPays / pointValue);
   if (pointPays > 0 && (!visit.customer_id || customerPoints < pointsNeeded)) return { ok: false as const, error: `Yeterli puan yok (mevcut ${customerPoints}, gereken ${pointsNeeded}).` };
-  const subtotal = lines.reduce((s, l) => s + l.total, 0);
-  const discount = Math.round(subtotal * (Math.max(0, Math.min(100, input.discountPercent)) / 100) * 100) / 100;
+  const svcSubtotal = lines.reduce((s, l) => s + l.total, 0);
+  const prodLines = (input.products ?? []).filter((l) => l.productId && l.qty > 0);
+  const prodTotal = Math.round(prodLines.reduce((s, l) => s + l.qty * l.unitPrice, 0) * 100) / 100;
+  const discount = Math.round(svcSubtotal * (Math.max(0, Math.min(100, input.discountPercent)) / 100) * 100) / 100;
+  const subtotal = svcSubtotal + prodTotal;
   const total = Math.round((subtotal - discount) * 100) / 100;
   const paid = input.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   if (Math.abs(paid - total) > 0.5) return { ok: false as const, error: `Ödeme toplamı (${paid}) tutarla (${total}) eşleşmiyor.` };
@@ -71,8 +76,9 @@ export async function closeVisit(input: CloseVisitInput) {
   if (error || !sale) return { ok: false as const, error: error?.message ?? "Satış oluşturulamadı" };
 
   // İndirimi kalemlere oransal dağıt (hak ediş net tutar üzerinden)
-  const factor = subtotal > 0 ? total / subtotal : 1;
-  await supabase.from("sale_items").insert(lines.map((l) => ({ ...l, sale_id: sale.id, total: Math.round(l.total * factor * 100) / 100 })));
+  const factor = svcSubtotal > 0 ? (svcSubtotal - discount) / svcSubtotal : 1;
+  if (lines.length) await supabase.from("sale_items").insert(lines.map((l) => ({ ...l, sale_id: sale.id, total: Math.round(l.total * factor * 100) / 100 })));
+  if (prodLines.length) await addProductLines(sale.id, prodLines);
   const pays = input.payments.filter((p) => Number(p.amount) > 0).map((p) => ({ sale_id: sale.id, method: p.method, amount: Number(p.amount), ref: String(p.ref ?? "").trim().toUpperCase() }));
   if (pays.length) await supabase.from("sale_payments").insert(pays);
   // Paket seans düşümü
@@ -134,6 +140,7 @@ export async function voidSale(saleId: string) {
   await supabase.from("customer_packages").update({ is_active: false, notes: "Satış iptal edildi" }).eq("sale_id", saleId);
   const { data: gcs } = await supabase.from("gift_cards").select("id, initial_amount, balance").eq("sale_id", saleId);
   for (const g of gcs ?? []) { if (Number(g.balance) === Number(g.initial_amount)) await supabase.from("gift_cards").delete().eq("id", g.id); else await supabase.from("gift_cards").update({ balance: 0, notes: "Satış iptal edildi" }).eq("id", g.id); }
+  await restockSale(saleId);
   const { error } = await supabase.from("sales").delete().eq("id", saleId);
   if (error) return { ok: false as const, error: error.message };
   if (sale?.visit_id) await supabase.from("visits").update({ status: "arrived" }).eq("id", sale.visit_id);

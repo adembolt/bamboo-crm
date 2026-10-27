@@ -78,7 +78,7 @@ export type Sale = {
 };
 export type SalePayment = { id: string; sale_id: string; method: PayMethod; amount: number; ref: string };
 export type SaleItem = {
-  id: string; sale_id: string; visit_item_id: string | null; kind: "service" | "product" | "package" | "gift_card" | "balance"; name: string; staff_id: string | null;
+  id: string; sale_id: string; visit_item_id: string | null; product_id: string | null; kind: "service" | "product" | "package" | "gift_card" | "balance"; name: string; staff_id: string | null;
   qty: number; unit_price: number; discount: number; total: number;
 };
 export type StaffPayout = {
@@ -88,6 +88,11 @@ export type StaffPayout = {
 
 export type GiftCard = { id: string; code: string; initial_amount: number; balance: number; buyer_name: string; customer_id: string | null; sale_id: string | null; expires_at: string | null; notes: string; created_by: string | null; created_at: string };
 export type GiftCardUse = { id: string; gift_card_id: string; sale_id: string | null; amount: number; created_at: string };
+export type Product = {
+  id: string; name: string; brand: string; category: string; barcode: string; unit: string; sale_price: number; cost_price: number;
+  stock_qty: number; min_stock: number; is_retail: boolean; is_active: boolean; notes: string;
+} & Timestamps;
+export type StockMove = { id: string; product_id: string; kind: "purchase" | "sale" | "use" | "adjust" | "return"; qty: number; unit_cost: number | null; note: string; sale_id: string | null; staff_id: string | null; created_by: string | null; created_at: string };
 export type BalanceLedger = { id: string; customer_id: string; amount: number; reason: string; sale_id: string | null; created_by: string | null; created_at: string };
 export type LoyaltyLedger = { id: string; customer_id: string; points: number; reason: string; sale_id: string | null; created_at: string };
 export type MessageTemplate = { kind: string; locale: string; body: string; updated_at: string };
@@ -129,10 +134,12 @@ export type Database = {
       expenses: Tbl<Expense, "expense_date" | "category" | "description" | "method" | "staff_id" | "created_by", [R<"expenses_staff_id_fkey","staff_id","staff">]>;
       sales: Tbl<Sale, "visit_id" | "customer_id" | "sale_date" | "subtotal" | "discount" | "total" | "notes" | "created_by", [R<"sales_visit_id_fkey","visit_id","visits">, R<"sales_customer_id_fkey","customer_id","customers">]>;
       sale_payments: Tbl<SalePayment, "ref", [R<"sale_payments_sale_id_fkey","sale_id","sales">]>;
-      sale_items: Tbl<SaleItem, "visit_item_id" | "kind" | "staff_id" | "qty" | "unit_price" | "discount" | "total", [R<"sale_items_sale_id_fkey","sale_id","sales">, R<"sale_items_staff_id_fkey","staff_id","staff">, R<"sale_items_visit_item_id_fkey","visit_item_id","visit_items">]>;
+      sale_items: Tbl<SaleItem, "visit_item_id" | "product_id" | "kind" | "staff_id" | "qty" | "unit_price" | "discount" | "total", [R<"sale_items_sale_id_fkey","sale_id","sales">, R<"sale_items_staff_id_fkey","staff_id","staff">, R<"sale_items_visit_item_id_fkey","visit_item_id","visit_items">]>;
       staff_payouts: Tbl<StaffPayout, "method" | "notes" | "paid_at" | "created_by", [R<"staff_payouts_staff_id_fkey","staff_id","staff">]>;
       gift_cards: Tbl<GiftCard, "buyer_name" | "customer_id" | "sale_id" | "expires_at" | "notes" | "created_by", [R<"gift_cards_customer_id_fkey","customer_id","customers">, R<"gift_cards_sale_id_fkey","sale_id","sales">]>;
       gift_card_uses: Tbl<GiftCardUse, "sale_id", [R<"gift_card_uses_gift_card_id_fkey","gift_card_id","gift_cards">]>;
+      products: Tbl<Product, Exclude<keyof Product, "name">>;
+      stock_moves: Tbl<StockMove, "unit_cost" | "note" | "sale_id" | "staff_id" | "created_by", [R<"stock_moves_product_id_fkey","product_id","products">, R<"stock_moves_staff_id_fkey","staff_id","staff">]>;
       balance_ledger: Tbl<BalanceLedger, "reason" | "sale_id" | "created_by", [R<"balance_ledger_customer_id_fkey","customer_id","customers">]>;
       loyalty_ledger: Tbl<LoyaltyLedger, "reason" | "sale_id", [R<"loyalty_ledger_customer_id_fkey","customer_id","customers">]>;
       message_templates: { Row: MessageTemplate; Insert: { kind: string; locale: string; body: string; updated_at?: string }; Update: Partial<MessageTemplate>; Relationships: [] };

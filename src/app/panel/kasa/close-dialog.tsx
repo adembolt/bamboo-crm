@@ -1,9 +1,10 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import type { PayMethod } from "@/lib/database.types";
 import type { DayVisit } from "@/lib/queries/kasa";
 import { money, fmtTime, fullName } from "@/lib/format";
 import { closeVisit } from "./actions";
+import { listProductsForSale } from "@/app/panel/urunler/actions";
 import { Modal } from "@/components/modal";
 
 export const METHOD: Record<PayMethod, string> = { cash: "Nakit", card: "Kart", transfer: "Havale", online: "Online", balance: "Bakiye", gift_card: "Hediye çeki", points: "Puan", package: "Paket", other: "Diğer" };
@@ -18,7 +19,13 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
   const pkgFor = (i: DayVisit["items"][number]) => pkgs.filter((p) => !p.service_id || p.service_id === i.service_id);
   const pkgRemaining = (pid: string) => { const p = pkgs.find((x) => x.id === pid)!; return p.total_sessions - p.used_sessions - Object.values(pkgUse).filter((x) => x === pid).length; };
   const subtotal = useMemo(() => items.reduce((s, i) => s + (pkgUse[i.id] ? 0 : (Number(prices[i.id]) || 0) - Number(i.discount)), 0), [items, prices, pkgUse]);
-  const total = Math.round(subtotal * (1 - (Number(disc) || 0) / 100));
+  type P = Awaited<ReturnType<typeof listProductsForSale>>[number];
+  const [catalog, setCatalog] = useState<P[] | null>(null);
+  const [prodLines, setProdLines] = useState<{ productId: string; qty: string; price: string }[]>([]);
+  useEffect(() => { let alive = true; listProductsForSale().then((p) => { if (alive) setCatalog(p); }).catch(() => setCatalog([])); return () => { alive = false; }; }, []);
+  const prodTotal = prodLines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
+  const total = Math.round(subtotal * (1 - (Number(disc) || 0) / 100) + prodTotal);
+  const sellerId = items.find((i) => i.staff_id)?.staff_id ?? null;
   const [pays, setPays] = useState<{ method: PayMethod; amount: string; ref?: string }[]>([{ method: "cash", amount: "" }]);
   const points = v.customer?.loyalty_points ?? 0;
   const balance = Number(v.customer?.balance ?? 0);
@@ -43,6 +50,7 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
         payments: pays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0, ref: p.ref })),
         itemOverrides: Object.fromEntries(items.map((i) => [i.id, Number(prices[i.id]) || 0])),
         packageUse: pkgUse,
+        products: prodLines.filter((l) => l.productId && Number(l.qty) > 0).map((l) => ({ productId: l.productId, qty: Number(l.qty), unitPrice: Number(l.price) || 0, staffId: sellerId })),
       });
       if (!r.ok) setErr(r.error); else onDone();
     });
@@ -65,6 +73,20 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
               {pkgUse[i.id] ? <span className="text-right text-sm text-good font-semibold">paket</span> : <span className="inp"><input inputMode="decimal" value={prices[i.id]} onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} className="text-right" /></span>}
             </div>
           ))}
+        </div>
+        <div className="grid gap-2">
+          {prodLines.map((l, k) => { const p = catalog?.find((x) => x.id === l.productId); return (
+            <div key={k} className="grid grid-cols-[1fr_60px_90px_auto] gap-2 items-center">
+              <span className="inp"><select value={l.productId} onChange={(e) => { const np = catalog?.find((x) => x.id === e.target.value); setProdLines(prodLines.map((x, j) => j === k ? { ...x, productId: e.target.value, price: np ? String(np.sale_price) : x.price } : x)); }}>
+                <option value="">Ürün seç…</option>{(catalog ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}{c.brand ? ` · ${c.brand}` : ""} ({c.stock_qty} {c.unit})</option>)}
+              </select></span>
+              <span className="inp"><input inputMode="decimal" value={l.qty} onChange={(e) => setProdLines(prodLines.map((x, j) => j === k ? { ...x, qty: e.target.value } : x))} className="text-right" aria-label="Adet" /></span>
+              <span className="inp"><input inputMode="decimal" value={l.price} onChange={(e) => setProdLines(prodLines.map((x, j) => j === k ? { ...x, price: e.target.value } : x))} className="text-right" aria-label="Birim fiyat" /></span>
+              <button type="button" className="btn ghost sm" onClick={() => setProdLines(prodLines.filter((_, j) => j !== k))} aria-label="Kaldır">✕</button>
+              {p && Number(l.qty) > p.stock_qty && <span className="col-span-4 text-[11px] text-warn">Stokta {p.stock_qty} {p.unit} var; satış stoğu eksiye düşürür.</span>}
+            </div>
+          ); })}
+          <button type="button" className="btn ghost sm justify-self-start" disabled={catalog === null} onClick={() => setProdLines([...prodLines, { productId: "", qty: "1", price: "" }])}>{catalog === null ? "Ürünler yükleniyor…" : catalog.length ? "+ Ürün ekle" : "+ Ürün ekle (önce Ürünler sayfasından ekleyin)"}</button>
         </div>
         <div className="grid grid-cols-[1fr_auto] gap-3 items-center border-t border-line pt-3">
           <label className="f">İndirim %<span className="inp"><input inputMode="decimal" value={disc} onChange={(e) => setDisc(e.target.value)} /></span></label>
