@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { useRouter } from "next/navigation";
 import type { Staff, VisitStatus } from "@/lib/database.types";
 import { Modal } from "@/components/modal";
+import { ServiceCombobox } from "@/components/service-combobox";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
 import { createClient } from "@/lib/supabase/client";
 import { money, hhmm, fmtDate, fmtTime, todayIso, addDays } from "@/lib/format";
@@ -77,7 +78,6 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
   const sale = d?.sale ?? null;
   const locked = !canWrite || !!sale;
   const svcById = useMemo(() => new Map(services.map((s) => [s.id, s])), [services]);
-  const catOrder = useMemo(() => [...categories].sort((a, b) => a.sort_order - b.sort_order), [categories]);
   const myIds = new Set(lines.map((l) => l.id).filter(Boolean) as string[]);
   const lineTotal = (l: Line) => Math.max(0, (Number(l.price) || 0) - (Number(l.discAmt) || 0));
   const total = lines.reduce((s, l) => s + lineTotal(l), 0);
@@ -183,19 +183,15 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
 
         {/* Hizmet satırları */}
         <div className="grid gap-2 border-y border-line py-3">
-          <div className="hidden lg:grid grid-cols-[1.2fr_78px_2fr_86px_90px_70px_80px_90px_28px] gap-2 text-[11px] font-semibold text-muted uppercase tracking-wide">
+          <div className="hidden lg:grid grid-cols-[1.5fr_84px_2.2fr_92px_90px_64px_80px_90px_28px] gap-2 text-[11px] font-semibold text-muted uppercase tracking-wide">
             <span>Uzman</span><span>Saat</span><span>Hizmet</span><span>Süre</span><span>Fiyat</span><span>İnd. %</span><span>İnd. ₺</span><span className="text-right">Toplam</span><span />
           </div>
           {lines.map((l) => { const fi = freeInfo(l); return (
             <div key={l.key} className="grid gap-1">
-              <div className="grid grid-cols-6 lg:grid-cols-[1.2fr_78px_2fr_86px_90px_70px_80px_90px_28px] gap-2 items-center rounded-xl lg:rounded-none bg-sunk/40 lg:bg-transparent p-2 lg:p-0">
+              <div className="grid grid-cols-6 lg:grid-cols-[1.5fr_84px_2.2fr_92px_90px_64px_80px_90px_28px] gap-2 items-center rounded-xl lg:rounded-none bg-sunk/40 lg:bg-transparent p-2 lg:p-0">
                 <span className="inp col-span-3 lg:col-span-1 order-first lg:order-none"><select aria-label="Uzman" value={l.staffId ?? ""} disabled={locked} onChange={(e) => setLine(l.key, { staffId: e.target.value || null })}><option value="">— atanmamış —</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></span>
                 <span className="inp col-span-1 order-first lg:order-none"><input aria-label="Saat" type="time" step={300} value={l.time} disabled={locked} onChange={(e) => setLine(l.key, { time: e.target.value })} /></span>
-                <span className="inp col-span-6 lg:col-span-1"><select aria-label="Hizmet" value={l.serviceId ?? ""} disabled={locked} onChange={(e) => pickService(l.key, e.target.value)}>
-                  {!l.serviceId && <option value="">{l.serviceName || "Hizmet seç…"}</option>}
-                  {catOrder.map((cat) => <optgroup key={cat.id} label={cat.name_tr}>{services.filter((s) => s.category_id === cat.id).map((s) => <option key={s.id} value={s.id}>{s.code ? `${s.code} ` : ""}{s.name_tr}</option>)}</optgroup>)}
-                  {services.some((s) => !s.category_id) && <optgroup label="Diğer">{services.filter((s) => !s.category_id).map((s) => <option key={s.id} value={s.id}>{s.name_tr}</option>)}</optgroup>}
-                </select></span>
+                <div className="col-span-6 lg:col-span-1 min-w-0"><ServiceCombobox services={services} categories={categories} value={l.serviceId} label={l.serviceName} disabled={locked} onPick={(id) => pickService(l.key, id)} /></div>
                 <span className="inp col-span-2 lg:col-span-1 order-first lg:order-none"><select aria-label="Süre" value={l.duration} disabled={locked} onChange={(e) => setLine(l.key, { duration: e.target.value })}>{[...new Set([...DURS, Number(l.duration) || 60])].sort((a, b) => a - b).map((m) => <option key={m} value={m}>{m >= 60 ? `${Math.floor(m / 60)} sa${m % 60 ? ` ${m % 60}` : ""}` : `${m} dk`}</option>)}</select></span>
                 <span className="inp col-span-2 lg:col-span-1"><input aria-label="Fiyat" inputMode="decimal" className="text-right" value={l.price} disabled={locked} onChange={(e) => setPrice(l.key, e.target.value)} /></span>
                 <span className="inp"><input aria-label="İndirim yüzde" inputMode="decimal" className="text-right" value={l.discPct} disabled={locked} onChange={(e) => setPct(l.key, e.target.value)} /></span>
