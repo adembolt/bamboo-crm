@@ -470,7 +470,8 @@ function NewItemDialog(props: {
   const [err, setErr] = useState("");
   const [staffId, setStaffId] = useState<string | null>(props.draft.staffId);
   const [time, setTime] = useState(props.draft.startHHMM);
-  const [q, setQ] = useState("");
+  const preset = props.draft.serviceId ? props.services.find((s) => s.id === props.draft.serviceId) : undefined;
+  const [q, setQ] = useState(preset ? (preset.code ?? preset.name_tr) : "");
   const [cat, setCat] = useState<string>("");
   const [serviceId, setServiceId] = useState<string>(props.draft.serviceId ?? "");
   const [price, setPrice] = useState<string>("");
