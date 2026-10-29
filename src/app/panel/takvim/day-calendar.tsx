@@ -56,7 +56,8 @@ export function DayCalendar(props: {
   const salonClose = toMin(settings.close_time);
   // Görünen saat aralığı: salon saatleri, o gün(ler) personelin uzatılmış çalışma saatleri ve randevular hangisi genişse
   const [openMin, closeMin] = useMemo(() => {
-    let lo = salonOpen, hi = salonClose;
+    // her gün en az 08:00–24:00 görünür
+    let lo = Math.min(salonOpen, 8 * 60), hi = Math.max(salonClose, 24 * 60);
     const dates = props.week ? props.week.dates : [date];
     for (const d of dates) for (const s of staff) {
       for (const [a, b] of workWindows(s.id, weekdayOf(d), props.schedules, salonOpen, salonClose, { mode: s.schedule_mode, date: d, rows: props.dayHours })) { lo = Math.min(lo, a); hi = Math.max(hi, b); }
