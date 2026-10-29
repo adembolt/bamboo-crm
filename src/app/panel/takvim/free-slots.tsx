@@ -64,13 +64,18 @@ export function FreeSlotFinder({ date, services, staff, staffServices }: { date:
                   <div key={d.date} className="grid gap-1">
                     <b className="text-sm">{fmtDateLong(d.date, lang)}</b>
                     {!d.slots.length ? <p className="text-xs text-muted">{t("Boş yer yok.")}</p> : (
-                      <div className="flex flex-wrap gap-1">
-                        {d.slots.flatMap((sl) => sl.staffIds.map((sid) => ({ time: sl.time, sid }))).slice(0, 60).map(({ time, sid }) => {
+                      <div className="grid gap-1">
+                        {[...new Set(d.slots.flatMap((sl) => sl.staffIds))].map((sid) => {
                           const s = sName(sid);
+                          const times = d.slots.filter((sl) => sl.staffIds.includes(sid)).map((sl) => sl.time);
                           return (
-                            <button key={`${time}${sid}`} type="button" onClick={() => pick(d.date, time, sid)} className="pill hover:brightness-110" style={{ borderLeft: `3px solid ${s?.color ?? "#888"}` }} title={s?.full_name}>
-                              <b className="num">{time}</b> <span className="text-[11px]">{s?.full_name.split(" ").slice(-1)[0]}</span>
-                            </button>
+                            <div key={sid} className="flex flex-wrap items-center gap-1">
+                              <span className="text-xs font-semibold w-28 truncate" style={{ borderLeft: `3px solid ${s?.color ?? "#888"}`, paddingLeft: 6 }}>{s?.full_name ?? "?"}</span>
+                              {times.slice(0, 24).map((time) => (
+                                <button key={time} type="button" onClick={() => pick(d.date, time, sid)} className="pill num hover:brightness-110">{time}</button>
+                              ))}
+                              {times.length > 24 && <span className="text-xs text-muted">+{times.length - 24}</span>}
+                            </div>
                           );
                         })}
                       </div>
