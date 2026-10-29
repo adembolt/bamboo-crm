@@ -15,8 +15,8 @@ const REASONS = ["İzin", "Hastalık", "Eğitim", "Kişisel", "Diğer"];
 const hm = (s: string) => s.slice(0, 5);
 
 /** DIKIDI'deki gibi: personelin haftalık çalışma saatleri + izin günleri */
-export function StaffScheduleDialog({ staffId, staffName, rows, offs, openTime, closeTime, openDays, onClose }: {
-  staffId: string; staffName: string; rows: SchedRowLite[]; offs: OffRowLite[]; openTime: string; closeTime: string; openDays: number[]; onClose: () => void;
+export function StaffScheduleDialog({ daily, staffId, staffName, rows, offs, openTime, closeTime, openDays, onClose }: {
+  daily?: boolean; staffId: string; staffName: string; rows: SchedRowLite[]; offs: OffRowLite[]; openTime: string; closeTime: string; openDays: number[]; onClose: () => void;
 }) {
   const t = useT(), lang = useLang();
   const router = useRouter();
@@ -70,6 +70,7 @@ export function StaffScheduleDialog({ staffId, staffName, rows, offs, openTime, 
       headerExtra={<div className="flex gap-1 bg-sunk p-1 rounded-lg">{(["week", "off"] as const).map((k) => <button key={k} type="button" onClick={() => setTab(k)} className={`px-3 py-1 rounded-md text-sm font-semibold ${tab === k ? "bg-surface shadow-card" : "text-muted"}`}>{k === "week" ? t("Haftalık program") : t("İzinler ({n})", { n: upcoming.length })}</button>)}</div>}>
       {tab === "week" ? (
         <div className="grid gap-3">
+          {daily && <p className="pill" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>{t("Bu uzmanın programı DIKIDI'den gün gün aktarıldı; saat girilmeyen gün çalışmıyor sayılır. Buradan haftalık program kaydederseniz gün gün program devre dışı kalır.")}</p>}
           <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={useProgram} onChange={(e) => setUseProgram(e.target.checked)} /> {t("Kişisel çalışma programı kullan")}</label>
           {!useProgram ? (
             <p className="text-sm text-muted">{t("Program yok: bu uzman salonun açık olduğu tüm saatlerde ({open}–{close}) müsait sayılır.", { open, close })}</p>

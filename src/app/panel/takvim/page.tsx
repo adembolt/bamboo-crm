@@ -29,10 +29,14 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
   const [day, picker, kasa, { data: monthVisits }, { data: ssRows }] = await Promise.all([
     isWeek ? loadDay(supabase, weekStart, weekDates[6]) : loadDay(supabase, d), loadServicesForPicker(supabase), loadKasaDay(supabase, d),
     supabase.from("visits").select("visit_date").gte("visit_date", monthStart).lte("visit_date", monthEnd).neq("status", "cancelled"),
-    supabase.from("staff_services").select("staff_id, service_id"),
+    supabase.from("staff_services").select("staff_id, service_id, price_override, duration_override"),
   ]);
   const staffServices: Record<string, string[]> = {};
-  for (const r of ssRows ?? []) (staffServices[r.staff_id] ??= []).push(r.service_id);
+  const overrides: Record<string, { p: number | null; d: number | null }> = {};
+  for (const r of ssRows ?? []) {
+    (staffServices[r.staff_id] ??= []).push(r.service_id);
+    if (r.price_override !== null || r.duration_override !== null) overrides[`${r.staff_id}:${r.service_id}`] = { p: r.price_override === null ? null : Number(r.price_override), d: r.duration_override };
+  }
   const sum = summarize(kasa.visits, kasa.expenses, Number(kasa.settings.kdv_rate), kasa.otherSales);
   const busyDays = new Set((monthVisits ?? []).map((v) => v.visit_date));
   const canWrite = !!profile && ["owner", "manager", "reception"].includes(profile.role);
@@ -80,6 +84,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           services={picker.services}
           categories={picker.categories}
           staffServices={staffServices}
+          overrides={overrides}
           canManage={!!profile && ["owner", "manager"].includes(profile.role)}
           canWrite={canWrite}
         />

@@ -31,7 +31,7 @@ let seq = 0; const k = () => `n${++seq}`;
 type SnapIn = { date: string; status: string; notes: string; color: string; anon: boolean; remind: number[]; remindConfirm: boolean; review: string; promo: string; brk: number; customerId: string | null; newName: string; lines: Line[] };
 const snapOf = (x: SnapIn) => JSON.stringify([x.date, x.status, x.notes, x.color, x.anon, x.remind, x.remindConfirm, x.review, x.promo, x.brk, x.customerId, x.newName, x.lines.map((l) => [l.id, l.serviceId, l.serviceName, l.staffId, l.time, l.duration, l.price, l.discAmt])]);
 
-export function VisitEditor(props: { visitId: string; staff: Staff[]; services: Svc[]; categories: Cat[]; staffServices: Record<string, string[]>; openTime: string; closeTime: string; canWrite: boolean; onClose: () => void }) {
+export function VisitEditor(props: { visitId: string; staff: Staff[]; services: Svc[]; categories: Cat[]; staffServices: Record<string, string[]>; overrides?: Record<string, { p: number | null; d: number | null }>; openTime: string; closeTime: string; canWrite: boolean; onClose: () => void }) {
   const { visitId, staff, services, categories, canWrite, onClose } = props;
   const router = useRouter();
   const t = useT();
@@ -109,7 +109,7 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
   function setLine(key: string, patch: Partial<Line>) { setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l))); }
   function pickService(key: string, id: string) {
     const s = svcById.get(id); if (!s) return;
-    setLines((ls) => ls.map((l) => { if (l.key !== key) return l; const price = Number(s.price); const pct = Number(l.discPct) || 0; return { ...l, serviceId: s.id, serviceName: s.name_tr, duration: String(s.duration_min + (s.buffer_min || 0)), price: String(price), discAmt: String(r2((price * pct) / 100)) }; }));
+    setLines((ls) => ls.map((l) => { if (l.key !== key) return l; const ov = l.staffId ? props.overrides?.[`${l.staffId}:${s.id}`] : undefined; const price = Number(ov?.p ?? s.price); const pct = Number(l.discPct) || 0; return { ...l, serviceId: s.id, serviceName: s.name_tr, duration: String((ov?.d ?? s.duration_min) + (s.buffer_min || 0)), price: String(price), discAmt: String(r2((price * pct) / 100)) }; }));
   }
   function setPct(key: string, v: string) { setLines((ls) => ls.map((l) => l.key === key ? { ...l, discPct: v, discAmt: String(r2(((Number(l.price) || 0) * (Number(v) || 0)) / 100)) } : l)); }
   function setAmt(key: string, v: string) { setLines((ls) => ls.map((l) => l.key === key ? { ...l, discAmt: v, discPct: (Number(l.price) || 0) > 0 ? String(r2(((Number(v) || 0) / Number(l.price)) * 100)) : "0" } : l)); }

@@ -21,6 +21,7 @@ export function StaffList({ staff, canManage, services, categories, assigned, ho
   const router = useRouter();
   const t = useT(), lang = useLang();
   const hoursLabel = (id: string) => {
+    if (staff.find((x) => x.id === id)?.schedule_mode === "daily") return t("gün gün (DIKIDI)");
     const rows = hours.schedules.filter((r) => r.staff_id === id);
     if (!rows.length) return t("salon saatleri");
     const days = new Set(rows.map((r) => r.weekday)).size;
@@ -55,7 +56,7 @@ export function StaffList({ staff, canManage, services, categories, assigned, ho
         {!staff.length && <p className="text-muted text-sm">{t("Henüz personel yok.")}</p>}
       </div>
       {svcFor && <StaffServicesDialog staffId={svcFor.id} staffName={svcFor.full_name} services={services} categories={categories} assigned={assigned[svcFor.id] ?? []} onClose={() => setSvcFor(null)} />}
-      {hoursFor && <StaffScheduleDialog staffId={hoursFor.id} staffName={hoursFor.full_name} rows={hours.schedules.filter((r) => r.staff_id === hoursFor.id)} offs={hours.offs.filter((o) => o.staff_id === hoursFor.id)} openTime={hours.openTime} closeTime={hours.closeTime} openDays={hours.openDays} onClose={() => setHoursFor(null)} />}
+      {hoursFor && <StaffScheduleDialog daily={hoursFor.schedule_mode === "daily"} staffId={hoursFor.id} staffName={hoursFor.full_name} rows={hours.schedules.filter((r) => r.staff_id === hoursFor.id)} offs={hours.offs.filter((o) => o.staff_id === hoursFor.id)} openTime={hours.openTime} closeTime={hours.closeTime} openDays={hours.openDays} onClose={() => setHoursFor(null)} />}
       {edit && <StaffForm staff={edit === "new" ? null : edit} onClose={() => { setEdit(null); router.refresh(); }} />}
     </div>
   );

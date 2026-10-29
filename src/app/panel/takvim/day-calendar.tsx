@@ -37,6 +37,7 @@ export function DayCalendar(props: {
   settings: { open_time: string; close_time: string; slot_minutes: number };
   services: ServiceLite[];
   staffServices: Record<string, string[]>;
+  overrides?: Record<string, { p: number | null; d: number | null }>;
   canManage?: boolean;
   categories: CategoryLite[];
   canWrite: boolean;
@@ -387,6 +388,7 @@ export function DayCalendar(props: {
           services={props.services}
           categories={props.categories}
           staffServices={props.staffServices}
+          overrides={props.overrides}
           openTime={settings.open_time}
           closeTime={settings.close_time}
           canWrite={canWrite}
@@ -429,6 +431,7 @@ export function DayCalendar(props: {
           services={props.services}
           categories={props.categories}
           staffServices={props.staffServices}
+          overrides={props.overrides}
           slotMinutes={settings.slot_minutes}
           onClose={() => setDraft(null)}
           onCreated={(visitId) => { setDraft(null); setSelectedVisit(visitId); }}
@@ -453,6 +456,7 @@ function NewItemDialog(props: {
   services: ServiceLite[];
   categories: CategoryLite[];
   staffServices: Record<string, string[]>;
+  overrides?: Record<string, { p: number | null; d: number | null }>;
   slotMinutes: number;
   workCheck: (staffId: string | null, startMin: number, dur: number) => boolean;
   onClose: () => void;
@@ -483,7 +487,9 @@ function NewItemDialog(props: {
       .slice(0, 60);
   }, [props.services, props.staffServices, staffId, q, cat]);
 
-  const service = props.services.find((s) => s.id === serviceId);
+  const baseService = props.services.find((s) => s.id === serviceId);
+  const ov = baseService && staffId ? props.overrides?.[`${staffId}:${baseService.id}`] : undefined;
+  const service = baseService ? { ...baseService, price: ov?.p ?? baseService.price, duration_min: ov?.d ?? baseService.duration_min } : undefined;
 
   function submit() {
     if (!service) return setErr(t("Bir hizmet seçin."));

@@ -76,5 +76,7 @@ const d: Record<string, [string, string]> = {
   "Randevuyu aç": ["Open appointment", "Открыть запись"],
   "WhatsApp'ta yaz": ["Message on WhatsApp", "Написать в WhatsApp"],
   "Ödemesi alınmış randevunun durumu değiştirilemez. Önce kasadan satışı iptal edin.": ["A paid appointment's status can't be changed. Void the sale in the till first.", "Статус оплаченной записи изменить нельзя. Сначала отмените продажу в кассе."],
+  "gün gün (DIKIDI)": ["day by day (DIKIDI)", "по дням (DIKIDI)"],
+  "Bu uzmanın programı DIKIDI'den gün gün aktarıldı; saat girilmeyen gün çalışmıyor sayılır. Buradan haftalık program kaydederseniz gün gün program devre dışı kalır.": ["This specialist's schedule was imported day by day from DIKIDI; a day without hours counts as not working. Saving a weekly schedule here turns off the day-by-day schedule.", "График мастера перенесён из DIKIDI по дням; день без часов считается нерабочим. Если сохранить здесь недельный график, график по дням отключится."],
 };
 export default d;

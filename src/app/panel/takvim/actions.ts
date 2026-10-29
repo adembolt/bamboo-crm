@@ -33,6 +33,12 @@ export async function addVisitItem(input: NewItemInput): Promise<Result> {
     .eq("id", input.serviceId)
     .single();
   if (!service) return { ok: false, error: t("Hizmet bulunamadı.") };
+  // uzmana özel süre / fiyat (DIKIDI'den aktarılan)
+  if (input.staffId) {
+    const { data: ov } = await supabase.from("staff_services").select("price_override, duration_override").eq("staff_id", input.staffId).eq("service_id", service.id).maybeSingle();
+    if (ov?.duration_override) service.duration_min = ov.duration_override;
+    if (ov?.price_override !== null && ov?.price_override !== undefined) service.price = ov.price_override;
+  }
 
   // Müşteri
   let customerId = input.customerId ?? null;

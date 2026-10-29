@@ -77,6 +77,7 @@ export async function saveSchedule(staffId: string, rows: { weekday: number; sta
     const { error } = await supabase.from("staff_schedules").insert(clean.map((r) => ({ staff_id: staffId, weekday: r.weekday, start_time: r.start, end_time: r.end })));
     if (error) return { ok: false as const, error: error.message };
   }
+  await supabase.from("staff").update({ schedule_mode: "weekly" }).eq("id", staffId);
   revalidatePath("/panel/personel"); revalidatePath("/panel/takvim");
   return { ok: true as const };
 }
