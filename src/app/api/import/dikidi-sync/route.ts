@@ -105,10 +105,15 @@ export async function POST(req: NextRequest) {
       .gte("visit.visit_date", from).lte("visit.visit_date", to);
     const existing = (exRaw ?? []) as unknown as Ex[];
     const byDikidi = new Map(existing.filter((e) => e.dikidi_id).map((e) => [e.dikidi_id!, e]));
+    // aralık dışına/dışından taşınmış randevular: kimlikle ara
+    const wanted = rows.flatMap((a) => (a.services?.length ? a.services : [{ id: "0" }]).map((s) => `${a.id}:${s.id}`)).filter((d) => !byDikidi.has(d));
+    for (let i = 0; i < wanted.length; i += 200) {
+      const { data: more } = await db.from("visit_items").select("id, visit_id, staff_id, starts_at, dikidi_id, status, visit:visits!inner(id, customer_id, visit_date, import_ref, sale:sales(id))").in("dikidi_id", wanted.slice(i, i + 200));
+      for (const e of (more ?? []) as unknown as Ex[]) byDikidi.set(e.dikidi_id!, e);
+    }
     const hasSale = (e: Ex) => Array.isArray(e.visit.sale) ? e.visit.sale.length > 0 : !!e.visit.sale;
     const legacy = existing.filter((e) => !e.dikidi_id && e.visit.import_ref);
     const legacyUsed = new Set<string>();
-    const seen = new Set<string>();
     const touchedVisits = new Set<string>();
     const visitCache = new Map<string, string>(); // customer|date → visit id
 
@@ -124,6 +129,29 @@ export async function POST(req: NextRequest) {
       visitCache.set(key, v.id); return v.id;
     };
 
+    // 1) eski aktarım kalemlerini DIKIDI randevularıyla eşle (aynı müşteri, gün, başlangıç dakikası)
+    const legacyMatch = new Map<string, Ex>();
+    for (const a of rows) {
+      if (!ISO.test(a.date) || !a.time || byDikidi.has(`${a.id}:${a.services?.[0]?.id ?? "0"}`)) continue;
+      const customerId = cust.byPhone.get(digits(a.client_phone)) ?? null;
+      if (!customerId) continue;
+      const staffId = staffByMaster.get(String(a.master_id)) ?? null;
+      let cur = localToIso(a.date, hm(a.time.slice(11)));
+      for (const s of a.services?.length ? a.services : [{ id: "0", time: "0" } as Appt["services"][number]]) {
+        const did = `${a.id}:${s.id}`;
+        const ex = byDikidi.has(did) ? undefined : legacy.find((e) => !legacyUsed.has(e.id) && e.visit.customer_id === customerId && e.visit.visit_date === a.date && Math.abs(new Date(e.starts_at).getTime() - new Date(cur).getTime()) < 60000 && (!e.staff_id || !staffId || e.staff_id === staffId));
+        if (ex) { legacyUsed.add(ex.id); legacyMatch.set(did, ex); report.legacyLinked++; }
+        cur = plusMin(cur, Math.max(5, Number(s.time) || 30));
+      }
+    }
+    // 2) karşılığı olmayan eski kalemleri ve DIKIDI'den tamamen kalkmış kalemleri önce iptal et (yeni kayıtlarla çakışmasın)
+    const incoming = new Set(rows.flatMap((a) => (a.services?.length ? a.services : [{ id: "0" }]).map((s) => `${a.id}:${s.id}`)));
+    for (const e of existing) {
+      if (e.status === "cancelled" || hasSale(e)) continue;
+      if (e.dikidi_id && !incoming.has(e.dikidi_id)) { await db.from("visit_items").update({ status: "cancelled" }).eq("id", e.id); touchedVisits.add(e.visit_id); report.cancelled++; }
+      else if (!e.dikidi_id && e.visit.import_ref && e.visit.customer_id && !legacyUsed.has(e.id) && data.cancelLegacy !== false) { await db.from("visit_items").update({ status: "cancelled" }).eq("id", e.id); touchedVisits.add(e.visit_id); report.legacyCancelled++; }
+    }
+    // 3) kaydet
     for (const a of rows) {
       try {
         if (!ISO.test(a.date) || !a.time) continue;
@@ -147,7 +175,6 @@ export async function POST(req: NextRequest) {
         for (let k = 0; k < svcs.length; k++) {
           const s = svcs[k];
           const did = `${a.id}:${s.id}`;
-          seen.add(did);
           const dur = Number(s.time) > 0 ? Number(s.time) : Math.max(5, Math.round((new Date(apptEnd).getTime() - new Date(cur).getTime()) / 60000 / (svcs.length - k)));
           const starts = cur, ends = k === svcs.length - 1 && new Date(apptEnd) > new Date(cur) ? apptEnd : plusMin(cur, Math.max(5, dur));
           cur = ends;
@@ -158,11 +185,7 @@ export async function POST(req: NextRequest) {
             staff_id: staffId, starts_at: starts, ends_at: ends, status, dikidi_id: did, booked_by_staff_id: author,
             notes: a.comment ? String(a.comment).slice(0, 500) : "",
           };
-          let ex = byDikidi.get(did);
-          if (!ex && customerId) {
-            ex = legacy.find((e) => !legacyUsed.has(e.id) && e.visit.customer_id === customerId && e.visit.visit_date === a.date && Math.abs(new Date(e.starts_at).getTime() - new Date(starts).getTime()) < 60000 && (!e.staff_id || !staffId || e.staff_id === staffId));
-            if (ex) { legacyUsed.add(ex.id); report.legacyLinked++; }
-          }
+          const ex = byDikidi.get(did) ?? legacyMatch.get(did);
           const save = async (id: string | null, payload: typeof fields & { visit_id?: string; price?: number }) => {
             let r = id ? await db.from("visit_items").update(payload).eq("id", id) : await db.from("visit_items").insert({ ...payload, visit_id: payload.visit_id!, price: payload.price ?? 0 });
             if (r.error && /overlap|exclusion|23P01/i.test(r.error.message + r.error.code)) {
@@ -190,19 +213,6 @@ export async function POST(req: NextRequest) {
         }
       } catch (e) {
         report.errors.push(`${a.date} ${a.time?.slice(11, 16)} ${a.client_last_name ?? ""}: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-    // DIKIDI'den tamamen kalkmış (listede yok) eşitlenmiş kalemler → iptal
-    for (const e of existing) {
-      if (e.dikidi_id && !seen.has(e.dikidi_id) && e.status !== "cancelled" && !hasSale(e)) {
-        await db.from("visit_items").update({ status: "cancelled" }).eq("id", e.id); touchedVisits.add(e.visit_id); report.cancelled++;
-      }
-    }
-    // Eski aktarımdan kalan ve DIKIDI'de karşılığı bulunmayan kalemler → iptal (satışı olmayanlar)
-    if (data.cancelLegacy !== false) {
-      for (const e of legacy) {
-        if (legacyUsed.has(e.id) || hasSale(e) || e.status === "cancelled" || !e.visit.customer_id) continue;
-        await db.from("visit_items").update({ status: "cancelled" }).eq("id", e.id); touchedVisits.add(e.visit_id); report.legacyCancelled++;
       }
     }
     // ziyaret durumunu kalemlerden türet

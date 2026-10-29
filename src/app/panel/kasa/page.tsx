@@ -25,7 +25,8 @@ export default async function KasaPage({ searchParams }: PageProps<"/panel/kasa"
         <h1 className="text-xl font-bold">{fmtDateLong(d, lang)}</h1>
         <Link className="btn ghost sm" href={`/panel/kasa?d=${addDays(d, 1)}`} aria-label={t("Sonraki gün")}>›</Link>
         {d !== todayIso() && <Link className="btn ghost sm" href="/panel/kasa">{t("Bugün")}</Link>}
-        <Link className="btn ghost sm ml-auto" href="/panel/kasa/hediye">{t("Hediye çekleri")}</Link>
+        {isManager ? <Link className="btn ghost sm ml-auto" href="/panel/kasa/hesaplar">{t("Kasa ve banka")}</Link> : null}
+        <Link className={`btn ghost sm${isManager ? "" : " ml-auto"}`} href="/panel/kasa/hediye">{t("Hediye çekleri")}</Link>
         <Link className="btn ghost sm" href={`/panel/kasa/rapor?p=day&from=${d}`}>{t("Grafikler")}</Link>
         <Link className="btn ghost sm" href={`/panel/kasa/ay?m=${d.slice(0, 7)}`}>{t("Ay özeti →")}</Link>
       </header>
