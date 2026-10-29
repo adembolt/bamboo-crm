@@ -1,0 +1,28 @@
+/* Müşteri listesi, Bugün paneli ve diğer CRM geliştirmeleri */
+const d: Record<string, [string, string]> = {
+  "Randevusu olan": ["With upcoming visit", "С предстоящей записью"],
+  "Kayıp (60+ gün)": ["Lapsed (60+ days)", "Потерянные (60+ дней)"],
+  "Doğum günü (7 gün)": ["Birthday (7 days)", "День рождения (7 дней)"],
+  "En çok harcayan": ["Top spenders", "Больше всего тратят"],
+  "Bakiyesi olan": ["With balance", "С балансом"],
+  "Paketi olan": ["With package", "С абонементом"],
+  "Gelmeme geçmişi": ["No-show history", "Были неявки"],
+  "Yeni (30 gün)": ["New (30 days)", "Новые (30 дней)"],
+  "Ziyaret sayısı": ["Number of visits", "Количество визитов"],
+  "Kayıt tarihi": ["Date added", "Дата регистрации"],
+  "{n} gün önce": ["{n} days ago", "{n} дн. назад"],
+  "Sırala": ["Sort", "Сортировка"],
+  "varsayılan": ["default", "по умолчанию"],
+  "Excel (CSV)": ["Excel (CSV)", "Excel (CSV)"],
+  "Filtre": ["Filter", "Фильтр"],
+  "Sonraki randevu": ["Next appointment", "Следующая запись"],
+  "Harcama": ["Spent", "Потрачено"],
+  "Durum": ["Status", "Статус"],
+  "{n} gün": ["{n} days", "{n} дн."],
+  "{n} paket": ["{n} package(s)", "Абонементов: {n}"],
+  "Sayfalar": ["Pages", "Страницы"],
+  "Önceki": ["Previous", "Назад"],
+  "Sonraki": ["Next", "Далее"],
+  "Sayfa {p} / {n}": ["Page {p} of {n}", "Стр. {p} из {n}"],
+};
+export default d;

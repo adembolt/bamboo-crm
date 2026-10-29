@@ -154,6 +154,7 @@ export type Database = {
       booking_requests: Tbl<BookingRequest, "last_name" | "email" | "locale" | "staff_id" | "notes" | "status" | "visit_id" | "ip_hash", [R<"booking_requests_service_id_fkey","service_id","services">, R<"booking_requests_staff_id_fkey","staff_id","staff">]>;
     };
     Views: {
+      customer_list: { Row: { id: string; first_name: string; last_name: string; phone: string; tags: string[]; locale: string; no_show_count: number; is_blocked: boolean; balance: number; loyalty_points: number; birth_date: string | null; created_at: string; consent_marketing: boolean; source: string; last_visit: string | null; next_visit: string | null; visits: number; spent: number; packages: number; bday_in: number | null }; Relationships: [] };
       visit_totals: { Row: { visit_id: string; customer_id: string | null; visit_date: string; item_count: number; subtotal: number; total: number }; Relationships: [] };
     };
     Functions: {
