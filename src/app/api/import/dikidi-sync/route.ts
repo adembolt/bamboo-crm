@@ -246,23 +246,32 @@ export async function POST(req: NextRequest) {
     const ids = rows.map((r) => String(r.id));
     const { data: exSales } = ids.length ? await db.from("sales").select("id, dikidi_id, total").in("dikidi_id", ids) : { data: [] };
     const exById = new Map((exSales ?? []).map((s) => [s.dikidi_id!, s]));
-    // ödeme satırları: (isim, tarih, saat) → [{method, amount}]
-    const payKey = (name: string, date: string, time: string) => `${sortedName(name)}|${date}|${time}`;
-    const pays = new Map<string, { method: PayMethod; amount: number }[]>();
+    // ödeme satırları: (isim, gün) → kasa hareketleri; satışa önce aynı dakika, sonra en yakın saat eşlenir, her satır bir kez kullanılır
+    type Pay = { id: string; method: PayMethod; amount: number; min: number };
+    const pays = new Map<string, Pay[]>();
     for (const c of cash) {
       if (c.sum !== "debt" || !/sales|продаж/i.test(c.type)) continue;
-      const m = c.dt.match(/(\d{2})\.(\d{2})\.(\d{4}) в (\d{2}:\d{2})/); if (!m) continue;
-      const k = payKey(c.who, `${m[3]}-${m[2]}-${m[1]}`, m[4]);
+      const m = c.dt.match(/(\d{2})\.(\d{2})\.(\d{4}) в (\d{2}):(\d{2})/); if (!m) continue;
+      const k = `${sortedName(c.who)}|${m[3]}-${m[2]}-${m[1]}`;
       const amount = Number(String(c.amt).replace(/[^\d.,-]/g, "").replace(",", ".")) || 0;
-      if (amount > 0) pays.set(k, [...(pays.get(k) ?? []), { method: /касса|cash/i.test(c.acc) ? "cash" : "card", amount }]);
+      if (amount > 0) pays.set(k, [...(pays.get(k) ?? []), { id: c.id, method: /касса|cash/i.test(c.acc) ? "cash" : "card", amount, min: Number(m[4]) * 60 + Number(m[5]) }]);
     }
+    const usedPay = new Set<string>();
+    const takePays = (name: string, date: string, time: string, total: number) => {
+      const list = (pays.get(`${sortedName(name)}|${date}`) ?? []).filter((p) => !usedPay.has(p.id));
+      const tm = /^\d{2}:\d{2}/.test(time) ? Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)) : 720;
+      list.sort((a, b) => Math.abs(a.min - tm) - Math.abs(b.min - tm));
+      const out: { method: PayMethod; amount: number }[] = []; let sum = 0;
+      for (const p of list) { if (sum >= total - 0.5) break; if (Math.abs(p.min - tm) > 240 && out.length) break; usedPay.add(p.id); out.push({ method: p.method, amount: p.amount }); sum += p.amount; }
+      return out;
+    };
 
     for (const r of rows) {
       try {
         const total = Math.round(Number(r.amount) * 100) / 100;
         if (!(total > 0) || !r.lines?.length) { report.zero++; continue; }
         const ex = exById.get(String(r.id));
-        if (ex && Math.abs(Number(ex.total) - total) < 0.01) { report.skipped++; continue; }
+        if (ex && !data.force && Math.abs(Number(ex.total) - total) < 0.01) { report.skipped++; continue; }
         if (ex) { await db.from("sales").delete().eq("id", ex.id); report.replaced++; }
         const phoneD = digits(r.phone);
         const customerId = (phoneD && cust.byPhone.get(phoneD)) || cust.byName.get(sortedName(r.name)) || null;
@@ -291,7 +300,7 @@ export async function POST(req: NextRequest) {
         }).select("id").single();
         if (error || !sale) throw new Error(error?.message ?? "sale");
         await db.from("sale_items").insert(lines.map((l) => ({ ...l, sale_id: sale.id })));
-        let p = pays.get(payKey(r.name, r.date, hm(r.time))) ?? [];
+        let p = takePays(r.name, r.date, hm(r.time), total);
         let paid = p.reduce((s, x) => s + x.amount, 0);
         if (paid > total + 0.5) { p = [{ method: p[0].method, amount: total }]; paid = total; }
         if (p.length) report.payMatched++;

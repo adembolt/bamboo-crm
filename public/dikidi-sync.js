@@ -181,8 +181,9 @@
   var runId = null;
   async function step(name, fn) {
     log("• " + name + "…");
-    try { var r = await fn(); report[name] = r; logEl.lastChild.textContent = "✓ " + name + (r && r.summary ? " — " + r.summary : ""); logEl.lastChild.style.color = "#9be3ad"; return r; }
-    catch (e) { ok = false; report[name] = { error: String(e && e.message || e) }; logEl.lastChild.textContent = "✗ " + name + ": " + (e && e.message || e); logEl.lastChild.style.color = "#ff9b8f"; return null; }
+    var line = logEl.lastChild;
+    try { var r = await fn(); report[name] = r; line.textContent = "✓ " + name + (r && r.summary ? " — " + r.summary : ""); line.style.color = "#9be3ad"; return r; }
+    catch (e) { ok = false; report[name] = { error: String(e && e.message || e) }; line.textContent = "✗ " + name + ": " + (e && e.message || e); line.style.color = "#ff9b8f"; return null; }
   }
   try { runId = (await post("run", { action: "start", from: apFrom, to: apTo })).id || null; }
   catch (e) { log("Bamboo'ya bağlanılamadı: " + (e.message || e), "err"); done(false); return; }
