@@ -4,6 +4,7 @@ import { loadDay, loadServicesForPicker } from "@/lib/queries/calendar";
 import { todayIso, addDays, fmtDateLong, fmtDate } from "@/lib/format";
 import { DayCalendar } from "./day-calendar";
 import { CalendarShell } from "./calendar-shell";
+import { AppointmentSearch } from "./appointment-search";
 import { MiniCalendar, KasaSnapshot } from "./side-panel";
 import { loadKasaDay, summarize } from "@/lib/queries/kasa";
 import { getT, getLang } from "@/lib/i18n/server";
@@ -53,18 +54,22 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           <Link role="tab" aria-selected={!isWeek} href={`/panel/takvim?d=${d}`} className={`px-3 py-1 rounded-md text-sm font-semibold ${!isWeek ? "bg-surface shadow-card" : "text-muted"}`}>{t("Gün")}</Link>
           <Link role="tab" aria-selected={isWeek} href={`/panel/takvim?d=${d}&v=week${weekStaffId ? `&s=${weekStaffId}` : ""}`} className={`px-3 py-1 rounded-md text-sm font-semibold ${isWeek ? "bg-surface shadow-card" : "text-muted"}`}>{t("Hafta")}</Link>
         </div>
-        <form className="ml-auto" action="/panel/takvim">
+        <div className="ml-auto flex items-center gap-2 flex-wrap w-full sm:w-auto">
+        <AppointmentSearch />
+        <form action="/panel/takvim">
           {isWeek && <><input type="hidden" name="v" value="week" /><input type="hidden" name="s" value={weekStaffId} /></>}
           <span className="inp"><input type="date" name="d" defaultValue={d} /></span>
         </form>
+        </div>
       </header>
       <CalendarShell side={<>
           <MiniCalendar date={d} busyDays={busyDays} />
           <KasaSnapshot date={d} gross={sum.gross} byMethod={sum.byMethod} expected={sum.expected} openCount={kasa.visits.filter((v) => !v.sale).length} closedCount={kasa.visits.filter((v) => v.sale).length + kasa.otherSales.length} />
         </>}>
         <DayCalendar
-          key={isWeek ? `w${weekStart}${weekStaffId}` : `d${d}`}
+          key={(isWeek ? `w${weekStart}${weekStaffId}` : `d${d}`) + (typeof sp.open === "string" ? sp.open : "")}
           date={d}
+          openVisit={typeof sp.open === "string" ? sp.open : undefined}
           week={isWeek && weekStaffId ? { dates: weekDates, staffId: weekStaffId } : undefined}
           staff={day.staff}
           items={day.items}

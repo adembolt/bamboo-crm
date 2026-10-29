@@ -3,10 +3,14 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Staff } from "@/lib/database.types";
 import type { DayItem } from "@/lib/queries/calendar";
+import type { DayVisit } from "@/lib/queries/kasa";
 import { minutesOfDay, hhmm, money, fmtTime, fullName, duration, todayIso, fmtDate, fmtWeekdayShort } from "@/lib/format";
 import { addVisitItem, moveItem, resizeItem, type NewItemInput } from "./actions";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
 import { VisitEditor } from "./visit-editor";
+import { setVisitFlag } from "./visit-actions";
+import { loadVisitForClose } from "@/app/panel/kasa/actions";
+import { CloseDialog } from "@/app/panel/kasa/close-dialog";
 import { StaffAvatar } from "@/components/staff-avatar";
 import { useT, useLang } from "@/lib/i18n/client";
 import { localName, staffTitle } from "@/lib/i18n/core";
@@ -35,10 +39,12 @@ export function DayCalendar(props: {
   canManage?: boolean;
   categories: CategoryLite[];
   canWrite: boolean;
+  openVisit?: string;
 }) {
   const { date, staff, items, settings, canWrite } = props;
   const t = useT();
   const lang = useLang();
+  const router = useRouter();
   const svcById = useMemo(() => new Map(props.services.map((s) => [s.id, s])), [props.services]);
   // kayıtlı ad Türkçe; başka dilde katalogdaki çeviri gösterilir
   const svcName = (it: { service_id: string | null; service_name: string }) => { const s = lang !== "tr" && it.service_id ? svcById.get(it.service_id) : undefined; return s ? localName(s, lang) : it.service_name; };
@@ -57,7 +63,28 @@ export function DayCalendar(props: {
     if (!staffId) return true; const h = hoursFor(staffId, d); return isWorking(startMin, startMin + dur, h.w, h.o);
   };
   const week = props.week;
-  const [selectedVisit, setSelectedVisit] = useState<string | null>(null);
+  const [selectedVisit, setSelectedVisit] = useState<string | null>(props.openVisit ?? null);
+  // sağ tık menüsü ve karttan ödeme
+  const [menu, setMenu] = useState<{ x: number; y: number; it: DayItem } | null>(null);
+  const [closing, setClosing] = useState<DayVisit | null>(null);
+  const [menuErr, setMenuErr] = useState("");
+  const [menuBusy, startMenu] = useTransition();
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(null); };
+    window.addEventListener("click", close); window.addEventListener("scroll", close, true); window.addEventListener("keydown", key);
+    return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); window.removeEventListener("keydown", key); };
+  }, [menu]);
+  function flag(it: DayItem, status: "confirmed" | "arrived" | "no_show") {
+    if (status === "no_show" && !confirm(t("{name} gelmedi olarak işaretlensin mi?", { name: it.visit.customer ? fullName(it.visit.customer) : t("Müşteri yok") }))) return;
+    setMenuErr("");
+    startMenu(async () => { const r = await setVisitFlag(it.visit_id, status); if (!r.ok) setMenuErr(r.error); else router.refresh(); });
+  }
+  function pay(it: DayItem) {
+    setMenuErr("");
+    startMenu(async () => { const r = await loadVisitForClose(it.visit_id); if (!r.ok) setMenuErr(r.error); else setClosing(r.visit); });
+  }
   // şimdiki saat çizgisi (yalnızca bugün) + açılışta o saate kaydır
   const scrollRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState<{ date: string; min: number } | null>(null);
@@ -114,7 +141,6 @@ export function DayCalendar(props: {
   }
 
   /* ---- sürükle-bırak (fare/kalem): taşı veya alt kenardan süre değiştir; bırakınca onay sorulur ---- */
-  const router = useRouter();
   type Drag = { mode: "move" | "resize"; it: DayItem; x0: number; y0: number; grab: number; a: number; dur: number; staffId: string | null; date: string; curMin: number; curStaff: string | null; curDate: string; curDur: number; active: boolean };
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -292,6 +318,7 @@ export function DayCalendar(props: {
                     data-item
                     onClick={() => { if (suppressClick.current) return; setSelectedVisit(it.visit_id); }}
                     onPointerDown={(e) => beginDrag(e, it, "move")}
+                    onContextMenu={(e) => { e.preventDefault(); setMenuErr(""); setMenu({ x: Math.min(e.clientX, window.innerWidth - 230), y: Math.min(e.clientY, window.innerHeight - 330), it }); }}
                     className={`absolute left-1 right-1 rounded-lg text-left px-2 py-1 overflow-hidden shadow-card border select-none ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${isDragged && drag.mode === "move" ? "opacity-40" : ""}`}
                     style={{
                       top, height: hh, zIndex: isDragged ? 15 : undefined,
@@ -323,6 +350,32 @@ export function DayCalendar(props: {
           ))}
         </div>
       </div>
+
+      {menuErr && !menu && <div role="alert" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 pill bad shadow-card cursor-pointer" onClick={() => setMenuErr("")}>{menuErr}</div>}
+      {menu && (() => {
+        const it = menu.it, c = it.visit.customer, st = it.status;
+        const paid = st === "completed";
+        const Item = ({ onClick, children, danger, disabled }: { onClick: () => void; children: React.ReactNode; danger?: boolean; disabled?: boolean }) => (
+          <button type="button" role="menuitem" disabled={disabled || menuBusy} onClick={(e) => { e.stopPropagation(); setMenu(null); onClick(); }}
+            className={`w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-sunk disabled:opacity-40 disabled:hover:bg-transparent ${danger ? "text-bad" : ""}`}>{children}</button>
+        );
+        return (
+          <div role="menu" aria-label={t("Randevu işlemleri")} onClick={(e) => e.stopPropagation()} className="fixed z-50 w-56 rounded-xl border border-line bg-surface shadow-card p-1" style={{ left: menu.x, top: menu.y }}>
+            <div className="px-3 py-1.5 border-b border-line mb-1">
+              <div className="text-sm font-bold truncate">{c ? fullName(c) : t("Müşteri yok")}</div>
+              <div className="text-[11px] text-muted truncate num">{fmtTime(it.starts_at)}–{fmtTime(it.ends_at)} · {svcName(it)}</div>
+            </div>
+            <Item onClick={() => setSelectedVisit(it.visit_id)}>✎ {t("Randevuyu aç")}</Item>
+            {canWrite && st === "pending" && <Item onClick={() => flag(it, "confirmed")}>✓ {t("Onayla")}</Item>}
+            {canWrite && !paid && st !== "arrived" && <Item onClick={() => flag(it, "arrived")}>● {t("Geldi")}</Item>}
+            {canWrite && !paid && st !== "no_show" && <Item danger onClick={() => flag(it, "no_show")}>✕ {t("Gelmedi")}</Item>}
+            {canWrite && !paid && <Item onClick={() => pay(it)}>₺ {t("Ödeme al")}</Item>}
+            {c?.phone && <Item onClick={() => window.open(`https://wa.me/${c.phone.replace(/\D/g, "")}`, "_blank", "noopener")}>✆ {t("WhatsApp'ta yaz")}</Item>}
+            {c && <Item onClick={() => router.push(`/panel/musteriler/${c.id}`)}>☺ {t("Müşteri kartı")}</Item>}
+          </div>
+        );
+      })()}
+      {closing && <CloseDialog v={closing} staffName={(id) => staff.find((s) => s.id === id)?.full_name ?? "—"} onClose={() => setClosing(null)} onDone={() => { setClosing(null); router.refresh(); }} />}
 
       {selectedVisit && (
         <VisitEditor

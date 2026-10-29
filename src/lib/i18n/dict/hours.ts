@@ -68,5 +68,13 @@ const d: Record<string, [string, string]> = {
   "Önceki hafta": ["Previous week", "Предыдущая неделя"],
   "Sonraki hafta": ["Next week", "Следующая неделя"],
   "Görünüm": ["View", "Вид"],
+  "Randevu ara: isim veya telefon": ["Find appointment: name or phone", "Найти запись: имя или телефон"],
+  "Randevu ara": ["Find appointment", "Найти запись"],
+  "Randevu bulunamadı.": ["No appointments found.", "Записи не найдены."],
+  "{name} gelmedi olarak işaretlensin mi?": ["Mark {name} as a no-show?", "Отметить, что {name} не пришёл(-ла)?"],
+  "Randevu işlemleri": ["Appointment actions", "Действия с записью"],
+  "Randevuyu aç": ["Open appointment", "Открыть запись"],
+  "WhatsApp'ta yaz": ["Message on WhatsApp", "Написать в WhatsApp"],
+  "Ödemesi alınmış randevunun durumu değiştirilemez. Önce kasadan satışı iptal edin.": ["A paid appointment's status can't be changed. Void the sale in the till first.", "Статус оплаченной записи изменить нельзя. Сначала отмените продажу в кассе."],
 };
 export default d;

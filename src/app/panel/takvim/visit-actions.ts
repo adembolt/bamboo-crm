@@ -123,6 +123,8 @@ export async function saveVisit(input: SaveVisitInput) {
 export async function setVisitFlag(visitId: string, status: VisitStatus) {
   const { supabase } = await requireOps();
   const { data: v } = await supabase.from("visits").select("status, customer_id").eq("id", visitId).single();
+  const { count: paid } = await supabase.from("sales").select("id", { count: "exact", head: true }).eq("visit_id", visitId);
+  if (paid) return { ok: false as const, error: (await getT())("Ödemesi alınmış randevunun durumu değiştirilemez. Önce kasadan satışı iptal edin.") };
   const { error } = await supabase.from("visits").update({ status }).eq("id", visitId);
   if (error) return { ok: false as const, error: error.message };
   await supabase.from("visit_items").update({ status }).eq("visit_id", visitId).neq("status", "cancelled");
@@ -213,4 +215,27 @@ export async function quickCustomer(input: { first_name: string; last_name: stri
   const { data, error } = await supabase.from("customers").insert({ first_name: first, last_name: input.last_name.trim(), phone, source: "salon" }).select("id, first_name, last_name, phone").single();
   if (error || !data) return { ok: false as const, error: error?.message ?? t("Müşteri oluşturulamadı") };
   return { ok: true as const, customer: data };
+}
+
+/** Takvimde müşteri adı/telefonuna göre randevu arama (son 30 gün + gelecek) */
+export async function searchAppointments(q: string) {
+  const { supabase } = await requireOps();
+  const term = q.trim().replace(/[%,()]/g, " ").slice(0, 60);
+  if (term.length < 2) return [];
+  const digits = term.replace(/\D/g, "");
+  const parts = term.split(/\s+/).filter(Boolean);
+  let cq = supabase.from("customers").select("id");
+  if (digits.length >= 4) cq = cq.ilike("phone", `%${digits.slice(-7)}%`);
+  else for (const p of parts) cq = cq.or(`first_name.ilike.%${p}%,last_name.ilike.%${p}%`);
+  const { data: cs } = await cq.limit(40);
+  const ids = (cs ?? []).map((c) => c.id);
+  if (!ids.length) return [];
+  const from = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const { data } = await supabase.from("visits").select("id, visit_date, status, customer:customers(first_name, last_name, phone), items:visit_items(starts_at, service_name, status, staff:staff(full_name))")
+    .in("customer_id", ids).gte("visit_date", from).neq("status", "cancelled").order("visit_date").limit(25);
+  return (data ?? []).map((v) => {
+    const its = v.items.filter((i) => i.status !== "cancelled").sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    return { id: v.id, date: v.visit_date, status: v.status, name: v.customer ? `${v.customer.first_name} ${v.customer.last_name}`.trim() : "", phone: v.customer?.phone ?? "",
+      time: its[0] ? HHMM(its[0].starts_at) : "", services: its.map((i) => i.service_name).join(", "), staff: [...new Set(its.map((i) => i.staff?.full_name?.split(" ")[0]).filter(Boolean))].join(", ") };
+  });
 }
