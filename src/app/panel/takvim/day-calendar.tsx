@@ -1,15 +1,16 @@
 "use client";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Staff } from "@/lib/database.types";
 import type { DayItem } from "@/lib/queries/calendar";
 import { minutesOfDay, hhmm, money, fmtTime, fullName, duration } from "@/lib/format";
-import { addVisitItem, type NewItemInput } from "./actions";
+import { addVisitItem, moveItem, resizeItem, type NewItemInput } from "./actions";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
 import { VisitEditor } from "./visit-editor";
 import { StaffAvatar } from "@/components/staff-avatar";
 import { useT, useLang } from "@/lib/i18n/client";
-import { localName } from "@/lib/i18n/core";
+import { localName, staffTitle } from "@/lib/i18n/core";
+import { weekdayOf, workWindows, offBlocks, offHours, isWorking, type SchedRow } from "@/lib/schedule";
 
 type ServiceLite = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en: string; name_ru?: string | null; duration_min: number; buffer_min: number; price: number; kind: string };
 type CategoryLite = { id: string; name_tr: string; name_en?: string | null; name_ru?: string | null; sort_order: number; color: string };
@@ -22,6 +23,7 @@ export function DayCalendar(props: {
   staff: Staff[];
   items: DayItem[];
   timeOff: { staff_id: string; starts_at: string; ends_at: string; reason: string }[];
+  schedules: SchedRow[];
   settings: { open_time: string; close_time: string; slot_minutes: number };
   services: ServiceLite[];
   staffServices: Record<string, string[]>;
@@ -38,6 +40,19 @@ export function DayCalendar(props: {
   const openMin = toMin(settings.open_time);
   const closeMin = toMin(settings.close_time);
   const totalMin = closeMin - openMin;
+  // personelin bugünkü çalışma pencereleri / izinleri
+  const hoursOf = useMemo(() => {
+    const wd = weekdayOf(date);
+    return new Map(staff.map((s) => {
+      const w = workWindows(s.id, wd, props.schedules, openMin, closeMin);
+      const o = offBlocks(s.id, date, props.timeOff);
+      const fullOff = o.some((x) => x.a <= openMin && x.b >= closeMin);
+      return [s.id, { w, o, grey: offHours(w, openMin, closeMin), working: w.length > 0 && !fullOff, fullOff }];
+    }));
+  }, [staff, props.schedules, props.timeOff, date, openMin, closeMin]);
+  const workCheck = (staffId: string | null, startMin: number, dur: number) => {
+    if (!staffId) return true; const h = hoursOf.get(staffId); return !h || isWorking(startMin, startMin + dur, h.w, h.o);
+  };
   const [selectedVisit, setSelectedVisit] = useState<string | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [hiddenLoaded, setHiddenLoaded] = useState(false);
@@ -75,9 +90,66 @@ export function DayCalendar(props: {
     setDraft({ staffId, startHHMM: hhmm(Math.max(openMin, Math.min(snapped, closeMin - settings.slot_minutes))) });
   }
 
+  /* ---- sürükle-bırak (fare/kalem): taşı veya alt kenardan süre değiştir; bırakınca onay sorulur ---- */
+  const router = useRouter();
+  type Drag = { mode: "move" | "resize"; it: DayItem; x0: number; y0: number; grab: number; a: number; dur: number; staffId: string | null; curMin: number; curStaff: string | null; curDur: number; active: boolean };
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const dragRef = useRef<Drag | null>(null);
+  const suppressClick = useRef(false);
+  const [confirmMove, setConfirmMove] = useState<Drag | null>(null);
+  const [moveErr, setMoveErr] = useState("");
+  const [moving, startMove] = useTransition();
+  const snap = (m: number) => Math.round(m / GRID_MIN) * GRID_MIN;
+  function beginDrag(e: React.PointerEvent, it: DayItem, mode: "move" | "resize") {
+    if (!canWrite || e.pointerType === "touch" || e.button !== 0) return;
+    if (it.status === "completed") return; // ödemesi alınmış
+    const a = minutesOfDay(it.starts_at), b = minutesOfDay(it.ends_at);
+    const col = (e.currentTarget as HTMLElement).closest("[data-col]") as HTMLElement | null;
+    const rect = col?.getBoundingClientRect();
+    const grab = rect ? openMin + (e.clientY - rect.top) / PX_PER_MIN - a : 0;
+    dragRef.current = { mode, it, x0: e.clientX, y0: e.clientY, grab, a, dur: b - a, staffId: it.staff_id, curMin: a, curStaff: it.staff_id, curDur: b - a, active: false };
+    if (mode === "resize") e.stopPropagation();
+    const move = (ev: PointerEvent) => {
+      const d = dragRef.current; if (!d) return;
+      if (!d.active && Math.hypot(ev.clientX - d.x0, ev.clientY - d.y0) < 5) return;
+      d.active = true;
+      if (d.mode === "move") {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest("[data-col]") as HTMLElement | null;
+        if (el) {
+          const r = el.getBoundingClientRect();
+          const m = snap(openMin + (ev.clientY - r.top) / PX_PER_MIN - d.grab);
+          d.curMin = Math.max(openMin, Math.min(m, closeMin - d.dur));
+          d.curStaff = el.dataset.col || null;
+        }
+      } else {
+        const dy = (ev.clientY - d.y0) / PX_PER_MIN;
+        d.curDur = Math.max(GRID_MIN, Math.min(snap(d.dur + dy), closeMin - d.a));
+      }
+      setDrag({ ...d });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      const d = dragRef.current; dragRef.current = null; setDrag(null);
+      if (!d?.active) return;
+      suppressClick.current = true; setTimeout(() => { suppressClick.current = false; }, 50);
+      const changed = d.mode === "move" ? d.curMin !== d.a || d.curStaff !== d.staffId : d.curDur !== d.dur;
+      if (changed) { setMoveErr(""); setConfirmMove(d); }
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  }
+  function doMove() {
+    const d = confirmMove; if (!d) return;
+    startMove(async () => {
+      const r = d.mode === "move" ? await moveItem(d.it.id, date, hhmm(d.curMin), d.curStaff) : await resizeItem(d.it.id, d.curDur);
+      if (!r.ok) { setMoveErr(r.error); return; }
+      setConfirmMove(null); router.refresh();
+    });
+  }
+  const staffName = (id: string | null) => (id ? staff.find((s) => s.id === id)?.full_name ?? "—" : t("Atanmamış"));
+
   const visibleStaff = staff.filter((s) => !hidden.has(s.id));
   const columns: { id: string | null; name: string; title: string; color: string; photo: string | null; items: DayItem[] }[] = visibleStaff.map((s) => ({
-    id: s.id, name: s.full_name, title: s.title, color: s.color, photo: s.photo_url, items: byStaff.m.get(s.id) ?? [],
+    id: s.id, name: s.full_name, title: staffTitle(s, lang), color: s.color, photo: s.photo_url, items: byStaff.m.get(s.id) ?? [],
   }));
   const hiddenWithItems = staff.filter((s) => hidden.has(s.id) && (byStaff.m.get(s.id)?.length ?? 0) > 0);
   if (byStaff.unassigned.length) columns.push({ id: null, name: t("Atanmamış"), title: "", color: "#9aa69c", photo: null, items: byStaff.unassigned });
@@ -100,6 +172,7 @@ export function DayCalendar(props: {
         })}
         <span className="ml-auto flex gap-1">
           {hidden.size > 0 && <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set())}>{t("Tümünü göster")}</button>}
+          <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set(staff.filter((s) => !hoursOf.get(s.id)?.working && !(byStaff.m.get(s.id)?.length)).map((s) => s.id)))}>{t("Sadece bugün çalışanlar")}</button>
           <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set(staff.filter((s) => !(byStaff.m.get(s.id)?.length)).map((s) => s.id)))}>{t("Sadece randevusu olanlar")}</button>
         </span>
         {hiddenLoaded && hiddenWithItems.length > 0 && <span className="w-full text-[11px] text-warn">{t("Gizli ama bugün randevusu olan: {names}", { names: hiddenWithItems.map((s) => s.full_name).join(", ") })}</span>}
@@ -115,6 +188,7 @@ export function DayCalendar(props: {
                 <div className="min-w-0">
                   <div className="font-semibold truncate text-sm">{c.name}</div>
                   <div className="text-[11px] text-muted truncate">{c.title || t("{n} randevu", { n: c.items.length })}</div>
+                  {c.id && (() => { const h = hoursOf.get(c.id); if (!h) return null; const txt = h.fullOff ? t("İzinli") : !h.w.length ? t("Çalışmıyor") : h.w.map(([a, b]) => `${hhmm(a)}–${hhmm(b)}`).join(", "); return <div className={`text-[10px] num truncate ${h.working ? "text-muted" : "text-warn font-semibold"}`}>{txt}</div>; })()}
                 </div>
               </div>
             </div>
@@ -133,7 +207,8 @@ export function DayCalendar(props: {
           {columns.map((col) => (
             <div
               key={col.id ?? "none"}
-              className="relative border-l border-line"
+              data-col={col.id ?? ""}
+              className={`relative border-l border-line ${drag?.active && drag.mode === "move" && drag.curStaff === col.id ? "bg-green-soft/40" : ""}`}
               style={{ height: totalMin * PX_PER_MIN, backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${GRID_MIN * PX_PER_MIN - 1}px, color-mix(in srgb, var(--line) 55%, transparent) ${GRID_MIN * PX_PER_MIN - 1}px, color-mix(in srgb, var(--line) 55%, transparent) ${GRID_MIN * PX_PER_MIN}px), repeating-linear-gradient(to bottom, transparent 0, transparent ${60 * PX_PER_MIN - 1}px, var(--line) ${60 * PX_PER_MIN - 1}px, var(--line) ${60 * PX_PER_MIN}px)` }}
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest("[data-item]")) return;
@@ -143,24 +218,36 @@ export function DayCalendar(props: {
               role={canWrite ? "button" : undefined}
               aria-label={t("{name} sütunu", { name: col.name })}
             >
-              {props.timeOff.filter((o) => o.staff_id === col.id).map((o) => {
-                const a = Math.max(openMin, minutesOfDay(o.starts_at)), b = Math.min(closeMin, minutesOfDay(o.ends_at));
+              {col.id && hoursOf.get(col.id)?.grey.map(([a, b]) => (
+                <div key={`g${a}`} aria-hidden className="absolute left-0 right-0 pointer-events-none" style={{ top: (a - openMin) * PX_PER_MIN, height: (b - a) * PX_PER_MIN, background: "color-mix(in srgb, var(--muted) 16%, transparent)" }} />
+              ))}
+              {col.id && hoursOf.get(col.id)?.o.map((o) => {
+                const a = Math.max(openMin, o.a), b = Math.min(closeMin, o.b);
                 if (b <= a) return null;
-                return <div key={o.starts_at} className="absolute left-0 right-0 bg-sunk/80 text-[11px] text-muted px-2 py-1" style={{ top: (a - openMin) * PX_PER_MIN, height: (b - a) * PX_PER_MIN }}>{o.reason || t("Müsait değil")}</div>;
+                return <div key={`o${o.a}`} className="absolute left-0 right-0 pointer-events-none text-[11px] font-semibold text-muted px-2 py-1" style={{ top: (a - openMin) * PX_PER_MIN, height: (b - a) * PX_PER_MIN, background: "repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 18%, transparent) 0 6px, color-mix(in srgb, var(--muted) 8%, transparent) 6px 12px)" }}>{o.reason ? t(o.reason) : t("Müsait değil")}</div>;
               })}
+              {drag?.active && drag.mode === "move" && drag.curStaff === col.id && (
+                <div aria-hidden className="absolute left-1 right-1 rounded-lg border-2 border-dashed pointer-events-none z-20 px-2 py-1 text-[11px] font-bold" style={{ top: (drag.curMin - openMin) * PX_PER_MIN, height: Math.max(22, drag.dur * PX_PER_MIN - 2), borderColor: "var(--green)", background: "color-mix(in srgb, var(--green) 12%, var(--surface))" }}>
+                  {hhmm(drag.curMin)}–{hhmm(drag.curMin + drag.dur)}{!workCheck(drag.curStaff, drag.curMin, drag.dur) && <span className="text-warn"> · {t("çalışma saati dışı")}</span>}
+                </div>
+              )}
               {col.items.map((it) => {
                 const a = minutesOfDay(it.starts_at), b = minutesOfDay(it.ends_at);
                 const top = (a - openMin) * PX_PER_MIN, h = Math.max(22, (b - a) * PX_PER_MIN - 2);
                 const c = it.visit.customer;
                 const multi = items.filter((x) => x.visit_id === it.visit_id && x.status !== "cancelled").length > 1;
+                const isDragged = drag?.active && drag.it.id === it.id;
+                const hh = isDragged && drag.mode === "resize" ? Math.max(22, drag.curDur * PX_PER_MIN - 2) : h;
+                const canDrag = canWrite && it.status !== "completed";
                 return (
                   <button
                     key={it.id}
                     data-item
-                    onClick={() => setSelectedVisit(it.visit_id)}
-                    className="absolute left-1 right-1 rounded-lg text-left px-2 py-1 overflow-hidden shadow-card border"
+                    onClick={() => { if (suppressClick.current) return; setSelectedVisit(it.visit_id); }}
+                    onPointerDown={(e) => beginDrag(e, it, "move")}
+                    className={`absolute left-1 right-1 rounded-lg text-left px-2 py-1 overflow-hidden shadow-card border select-none ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${isDragged && drag.mode === "move" ? "opacity-40" : ""}`}
                     style={{
-                      top, height: h,
+                      top, height: hh, zIndex: isDragged ? 15 : undefined,
                       background: it.status === "no_show" ? "var(--bad-bg)" : it.visit.color ? `color-mix(in srgb, ${it.visit.color} 45%, var(--surface))` : it.status === "completed" || it.status === "arrived" ? "var(--good-bg)" : it.status === "pending" ? "var(--warn-bg)" : "var(--surface)",
                       backgroundImage: it.break_min > 0 ? `repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--muted) 25%, transparent) 5px 7px)` : undefined,
                       backgroundSize: it.break_min > 0 ? `100% ${it.break_min * PX_PER_MIN}px` : undefined,
@@ -172,7 +259,8 @@ export function DayCalendar(props: {
                     <div className="text-[12px] font-bold truncate leading-tight">
                       {c ? fullName(c) : t("Müşteri yok")} {multi && <span className="pill gold ml-1 px-1.5 py-0 text-[10px]">{t("çoklu")}</span>}
                     </div>
-                    <div className="text-[11px] text-muted truncate leading-tight">{fmtTime(it.starts_at)} · {svcName(it)}</div>
+                    <div className="text-[11px] text-muted truncate leading-tight">{isDragged && drag.mode === "resize" ? `${fmtTime(it.starts_at)}–${hhmm(a + drag.curDur)} · ${duration(drag.curDur, lang)}` : `${fmtTime(it.starts_at)} · ${svcName(it)}`}</div>
+                    {canDrag && <span aria-hidden onPointerDown={(e) => beginDrag(e, it, "resize")} className="absolute left-0 right-0 bottom-0 h-1.5 cursor-ns-resize" title={t("Süreyi değiştirmek için sürükleyin")} />}
                   </button>
                 );
               })}
@@ -196,8 +284,34 @@ export function DayCalendar(props: {
         />
       )}
 
+      {confirmMove && (
+        <Modal title={confirmMove.mode === "move" ? t("Randevuyu taşı") : t("Süreyi değiştir")} onClose={() => !moving && setConfirmMove(null)}>
+          <div className="grid gap-3">
+            <div className="rounded-xl border border-line p-3 grid gap-1 text-sm">
+              <b>{confirmMove.it.visit.customer ? fullName(confirmMove.it.visit.customer) : t("Müşteri yok")} · {svcName(confirmMove.it)}</b>
+              {confirmMove.mode === "move" ? (
+                <>
+                  <span className="num">{t("Saat")}: {hhmm(confirmMove.a)}–{hhmm(confirmMove.a + confirmMove.dur)} → <b>{hhmm(confirmMove.curMin)}–{hhmm(confirmMove.curMin + confirmMove.dur)}</b></span>
+                  {confirmMove.curStaff !== confirmMove.staffId && <span>{t("Uzman")}: {staffName(confirmMove.staffId)} → <b>{staffName(confirmMove.curStaff)}</b></span>}
+                </>
+              ) : (
+                <span className="num">{t("Süre")}: {duration(confirmMove.dur, lang)} → <b>{duration(confirmMove.curDur, lang)}</b> ({hhmm(confirmMove.a)}–{hhmm(confirmMove.a + confirmMove.curDur)})</span>
+              )}
+            </div>
+            {!workCheck(confirmMove.curStaff, confirmMove.mode === "move" ? confirmMove.curMin : confirmMove.a, confirmMove.mode === "move" ? confirmMove.dur : confirmMove.curDur) && <p className="pill" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>⚠ {t("Uzman bu saatte çalışmıyor veya izinli.")}</p>}
+            {confirmMove.curStaff && confirmMove.it.service_id && props.staffServices[confirmMove.curStaff]?.length && !props.staffServices[confirmMove.curStaff].includes(confirmMove.it.service_id) ? <p className="pill" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>⚠ {t("Bu hizmet seçilen uzmanın hizmet listesinde yok.")}</p> : null}
+            {moveErr && <p className="pill bad">{moveErr}</p>}
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn ghost" disabled={moving} onClick={() => setConfirmMove(null)}>{t("Vazgeç")}</button>
+              <button type="button" className="btn" disabled={moving} onClick={doMove}>{moving ? t("Kaydediliyor…") : confirmMove.mode === "move" ? t("Taşı") : t("Kaydet")}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {draft && (
         <NewItemDialog
+          workCheck={workCheck}
           date={date}
           draft={draft}
           staff={staff}
@@ -229,6 +343,7 @@ function NewItemDialog(props: {
   categories: CategoryLite[];
   staffServices: Record<string, string[]>;
   slotMinutes: number;
+  workCheck: (staffId: string | null, startMin: number, dur: number) => boolean;
   onClose: () => void;
   onCreated: (visitId: string) => void;
 }) {
@@ -336,6 +451,7 @@ function NewItemDialog(props: {
           </label>
         </div>
 
+        {!props.workCheck(staffId, toMin(time), service?.duration_min ?? props.slotMinutes) && <p className="pill" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>⚠ {t("Uzman bu saatte çalışmıyor veya izinli. Yine de kaydedebilirsiniz.")}</p>}
         {err && <p className="pill bad">{err}</p>}
         <div className="flex gap-2 justify-end">
           <button className="btn ghost" onClick={props.onClose} type="button">{t("Vazgeç")}</button>

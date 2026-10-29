@@ -1,11 +1,10 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { localToIso, minutesOfDay, hhmm, todayIso } from "@/lib/format";
+import { toMin, weekdayOf, workWindows, offBlocks } from "@/lib/schedule";
 
 export type Slot = { time: string; staffIds: string[] };
 
-function toMin(t: string) { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); }
-function weekdayOf(isoDate: string) { const d = new Date(isoDate + "T12:00:00+03:00"); const w = d.getUTCDay(); return w === 0 ? 7 : w; }
 
 /**
  * Bir gün için uygun saatleri hesaplar.
@@ -43,7 +42,7 @@ export async function getSlots(opts: { serviceId: string; staffId: string | null
   const dayStart = localToIso(opts.date, "00:00");
   const dayEnd = localToIso(opts.date, "23:59");
   const [{ data: schedules }, { data: offs }, { data: busy }] = await Promise.all([
-    db.from("staff_schedules").select("staff_id, start_time, end_time").in("staff_id", candidates).eq("weekday", wd),
+    db.from("staff_schedules").select("staff_id, weekday, start_time, end_time").in("staff_id", candidates),
     db.from("staff_time_off").select("staff_id, starts_at, ends_at").in("staff_id", candidates).lte("starts_at", dayEnd).gte("ends_at", dayStart),
     db.from("visit_items").select("staff_id, starts_at, ends_at").in("staff_id", candidates).gte("starts_at", dayStart).lte("starts_at", dayEnd).not("status", "in", "(cancelled,no_show)"),
   ]);
@@ -57,10 +56,9 @@ export async function getSlots(opts: { serviceId: string; staffId: string | null
 
   const slots = new Map<string, string[]>();
   for (const sid of candidates) {
-    const sch = (schedules ?? []).filter((s) => s.staff_id === sid);
-    const windows = sch.length ? sch.map((s) => [toMin(s.start_time), toMin(s.end_time)] as const) : [[openMin, closeMin] as const];
+    const windows = workWindows(sid, wd, schedules ?? [], openMin, closeMin);
     const blocks: [number, number][] = [
-      ...(offs ?? []).filter((o) => o.staff_id === sid).map((o) => [minutesOfDay(o.starts_at), minutesOfDay(o.ends_at)] as [number, number]),
+      ...offBlocks(sid, opts.date, offs ?? []).map((o) => [o.a, o.b] as [number, number]),
       ...(busy ?? []).filter((b) => b.staff_id === sid).map((b) => [minutesOfDay(b.starts_at), minutesOfDay(b.ends_at)] as [number, number]),
       ...(pendingReq ?? []).filter((r) => r.staff_id === sid || r.staff_id === null).map((r) => { const a = minutesOfDay(r.starts_at); return [a, a + ((r.service?.duration_min ?? 60) + (r.service?.buffer_min ?? 0))] as [number, number]; }),
     ];

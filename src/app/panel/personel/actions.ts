@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/auth";
 import { getT } from "@/lib/i18n/server";
+import { localToIso } from "@/lib/format";
 
 export async function saveStaff(_prev: { error: string; saved?: boolean }, formData: FormData) {
   const { supabase } = await requireManager();
@@ -9,6 +10,8 @@ export async function saveStaff(_prev: { error: string; saved?: boolean }, formD
   const payload = {
     full_name: String(formData.get("full_name") ?? "").trim(),
     title: String(formData.get("title") ?? "").trim(),
+    title_en: String(formData.get("title_en") ?? "").trim(),
+    title_ru: String(formData.get("title_ru") ?? "").trim(),
     phone: String(formData.get("phone") ?? "").trim(),
     color: String(formData.get("color") ?? "#5E9E6C"),
     languages: String(formData.get("languages") ?? "tr").split(",").map((s) => s.trim()).filter(Boolean),
@@ -52,5 +55,56 @@ export async function setStaffPhoto(staffId: string, url: string | null) {
   const { error } = await supabase.from("staff").update({ photo_url: url }).eq("id", staffId);
   if (error) return { ok: false as const, error: error.message };
   revalidatePath("/panel/takvim"); revalidatePath("/panel/personel");
+  return { ok: true as const };
+}
+
+const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Haftalık çalışma programı: tam liste ile değiştirir. Boş liste = program yok (salon saatleri geçerli) */
+export async function saveSchedule(staffId: string, rows: { weekday: number; start: string; end: string }[]) {
+  const { supabase } = await requireManager();
+  const t = await getT();
+  const clean = rows.filter((r) => r.weekday >= 1 && r.weekday <= 7 && HM.test(r.start) && HM.test(r.end));
+  for (const r of clean) if (r.end <= r.start) return { ok: false as const, error: t("Bitiş saati başlangıçtan sonra olmalı.") };
+  // aynı günde çakışan aralık olmasın
+  for (let d = 1; d <= 7; d++) {
+    const day = clean.filter((r) => r.weekday === d).sort((a, b) => a.start.localeCompare(b.start));
+    for (let i = 1; i < day.length; i++) if (day[i].start < day[i - 1].end) return { ok: false as const, error: t("Aynı gün içindeki saat aralıkları çakışıyor.") };
+  }
+  const { error: delErr } = await supabase.from("staff_schedules").delete().eq("staff_id", staffId);
+  if (delErr) return { ok: false as const, error: delErr.message };
+  if (clean.length) {
+    const { error } = await supabase.from("staff_schedules").insert(clean.map((r) => ({ staff_id: staffId, weekday: r.weekday, start_time: r.start, end_time: r.end })));
+    if (error) return { ok: false as const, error: error.message };
+  }
+  revalidatePath("/panel/personel"); revalidatePath("/panel/takvim");
+  return { ok: true as const };
+}
+
+/** İzin / kapalı saat ekler. Tam gün: from..to tarihleri dahil; değilse tek günde saat aralığı */
+export async function addTimeOff(input: { staffId: string; from: string; to: string; allDay: boolean; start?: string; end?: string; reason: string }) {
+  const { supabase } = await requireManager();
+  const t = await getT();
+  const D = /^\d{4}-\d{2}-\d{2}$/;
+  if (!D.test(input.from) || !D.test(input.to) || input.to < input.from) return { ok: false as const, error: t("Tarihleri kontrol edin.") };
+  let startsAt: string, endsAt: string;
+  if (input.allDay) {
+    startsAt = localToIso(input.from, "00:00");
+    endsAt = new Date(new Date(localToIso(input.to, "00:00")).getTime() + 24 * 3600 * 1000).toISOString();
+  } else {
+    if (!HM.test(input.start ?? "") || !HM.test(input.end ?? "") || input.end! <= input.start!) return { ok: false as const, error: t("Saatleri kontrol edin.") };
+    startsAt = localToIso(input.from, input.start!); endsAt = localToIso(input.from, input.end!);
+  }
+  const { error } = await supabase.from("staff_time_off").insert({ staff_id: input.staffId, starts_at: startsAt, ends_at: endsAt, reason: input.reason.trim().slice(0, 80) });
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/panel/personel"); revalidatePath("/panel/takvim");
+  return { ok: true as const };
+}
+
+export async function deleteTimeOff(id: string) {
+  const { supabase } = await requireManager();
+  const { error } = await supabase.from("staff_time_off").delete().eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/panel/personel"); revalidatePath("/panel/takvim");
   return { ok: true as const };
 }

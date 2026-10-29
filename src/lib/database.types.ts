@@ -36,7 +36,7 @@ export type Service = {
 } & Timestamps;
 
 export type Staff = {
-  id: string; full_name: string; title: string; phone: string; color: string; photo_url: string | null;
+  id: string; full_name: string; title: string; title_en: string; title_ru: string; phone: string; color: string; photo_url: string | null;
   languages: string[]; online_bookable: boolean; pay_model: "daily_prim" | "percent" | "fixed";
   pay_percent: number; product_percent: number; is_active: boolean; sort_order: number; dikidi_id: string | null;
 } & Timestamps;

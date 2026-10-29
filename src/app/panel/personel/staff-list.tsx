@@ -6,16 +6,28 @@ import { saveStaff } from "./actions";
 import { Modal } from "@/components/modal";
 import { StaffServicesDialog } from "./staff-services";
 import { StaffAvatar } from "@/components/staff-avatar";
-import { useT } from "@/lib/i18n/client";
+import { useT, useLang } from "@/lib/i18n/client";
+import { staffTitle } from "@/lib/i18n/core";
+import { StaffScheduleDialog, type SchedRowLite, type OffRowLite } from "./staff-schedule";
 
 const PAY: Record<Staff["pay_model"], string> = { daily_prim: "Günlük prim", percent: "Ay sonu yüzde", fixed: "Sabit" };
 
 type Svc = { id: string; category_id: string | null; code: string | null; name_tr: string; duration_min: number; price: number };
-export function StaffList({ staff, canManage, services, categories, assigned }: { staff: Staff[]; canManage: boolean; services: Svc[]; categories: { id: string; name_tr: string; sort_order: number }[]; assigned: Record<string, string[]> }) {
+type Hours = { schedules: (SchedRowLite & { staff_id: string })[]; offs: (OffRowLite & { staff_id: string })[]; openTime: string; closeTime: string; openDays: number[] };
+export function StaffList({ staff, canManage, services, categories, assigned, hours }: { staff: Staff[]; canManage: boolean; services: Svc[]; categories: { id: string; name_tr: string; sort_order: number }[]; assigned: Record<string, string[]>; hours: Hours }) {
   const [edit, setEdit] = useState<Staff | "new" | null>(null);
   const [svcFor, setSvcFor] = useState<Staff | null>(null);
+  const [hoursFor, setHoursFor] = useState<Staff | null>(null);
   const router = useRouter();
-  const t = useT();
+  const t = useT(), lang = useLang();
+  const hoursLabel = (id: string) => {
+    const rows = hours.schedules.filter((r) => r.staff_id === id);
+    if (!rows.length) return t("salon saatleri");
+    const days = new Set(rows.map((r) => r.weekday)).size;
+    const min = rows.reduce((m, r) => m + (toM(r.end_time) - toM(r.start_time)), 0);
+    return t("{d} gün · {h} sa/hafta", { d: days, h: Math.round(min / 6) / 10 });
+  };
+  const nextOff = (id: string) => hours.offs.filter((o) => o.staff_id === id && o.ends_at >= new Date().toISOString()).sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
   return (
     <div className="grid gap-4">
       <header className="flex items-center gap-3"><h1 className="text-xl font-bold">{t("Personel")}</h1>{canManage && <button className="btn ml-auto" onClick={() => setEdit("new")}>+ {t("Personel ekle")}</button>}</header>
@@ -24,7 +36,7 @@ export function StaffList({ staff, canManage, services, categories, assigned }: 
           <div key={s.id} className={`panel grid gap-2 ${!s.is_active ? "opacity-60" : ""}`}>
             <div className="flex items-center gap-3">
               <StaffAvatar staff={s} size={48} editable={canManage} />
-              <div className="min-w-0"><div className="font-bold truncate">{s.full_name}</div><div className="text-xs text-muted">{s.title || "—"}</div></div>
+              <div className="min-w-0"><div className="font-bold truncate">{s.full_name}</div><div className="text-xs text-muted">{staffTitle(s, lang) || "—"}</div></div>
               {canManage && <button className="btn ghost sm ml-auto" onClick={() => setEdit(s)}>{t("Düzenle")}</button>}
             </div>
             <div className="flex gap-2 flex-wrap text-xs">
@@ -35,11 +47,15 @@ export function StaffList({ staff, canManage, services, categories, assigned }: 
             <button type="button" className="btn ghost sm justify-self-start" disabled={!canManage} onClick={() => setSvcFor(s)} title={t("Bu uzmanın yapabildiği hizmetler")}>
               ✦ {t("Hizmetler")}: {assigned[s.id]?.length ? t("{n} hizmet", { n: assigned[s.id].length }) : t("atanmamış (tümü açık)")}
             </button>
+            <button type="button" className="btn ghost sm justify-self-start" disabled={!canManage} onClick={() => setHoursFor(s)} title={t("Çalışma saatleri ve izinler")}>
+              🕘 {t("Çalışma saatleri")}: {hoursLabel(s.id)}{nextOff(s.id) ? <span className="pill ml-1 px-1.5 py-0 text-[10px]" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>{t("izin")} {new Date(nextOff(s.id)!.starts_at).toLocaleDateString(lang === "tr" ? "tr-TR" : lang === "ru" ? "ru-RU" : "en-GB", { day: "2-digit", month: "2-digit", timeZone: "Europe/Istanbul" })}</span> : null}
+            </button>
           </div>
         ))}
         {!staff.length && <p className="text-muted text-sm">{t("Henüz personel yok.")}</p>}
       </div>
       {svcFor && <StaffServicesDialog staffId={svcFor.id} staffName={svcFor.full_name} services={services} categories={categories} assigned={assigned[svcFor.id] ?? []} onClose={() => setSvcFor(null)} />}
+      {hoursFor && <StaffScheduleDialog staffId={hoursFor.id} staffName={hoursFor.full_name} rows={hours.schedules.filter((r) => r.staff_id === hoursFor.id)} offs={hours.offs.filter((o) => o.staff_id === hoursFor.id)} openTime={hours.openTime} closeTime={hours.closeTime} openDays={hours.openDays} onClose={() => setHoursFor(null)} />}
       {edit && <StaffForm staff={edit === "new" ? null : edit} onClose={() => { setEdit(null); router.refresh(); }} />}
     </div>
   );
@@ -55,6 +71,8 @@ function StaffForm({ staff: s, onClose }: { staff: Staff | null; onClose: () => 
         <div className="grid grid-cols-2 gap-3">
           <label className="f col-span-2">{t("Ad Soyad *")}<span className="inp"><input name="full_name" defaultValue={s?.full_name} required /></span></label>
           <label className="f">{t("Unvan")}<span className="inp"><input name="title" defaultValue={s?.title} placeholder={t("Kozmetolog, Masöz…")} /></span></label>
+          <label className="f">{t("Unvan (İngilizce)")}<span className="inp"><input name="title_en" defaultValue={s?.title_en} placeholder="Cosmetologist" /></span></label>
+          <label className="f">{t("Unvan (Rusça)")}<span className="inp"><input name="title_ru" defaultValue={s?.title_ru} placeholder="Косметолог" /></span></label>
           <label className="f">{t("Telefon")}<span className="inp"><input name="phone" defaultValue={s?.phone} /></span></label>
           <label className="f">{t("Renk")}<span className="inp"><input name="color" type="color" defaultValue={s?.color ?? "#5E9E6C"} /></span></label>
           <label className="f">{t("Diller (virgül)")}<span className="inp"><input name="languages" defaultValue={s?.languages.join(", ") ?? "tr"} /></span></label>
@@ -71,3 +89,5 @@ function StaffForm({ staff: s, onClose }: { staff: Staff | null; onClose: () => 
     </Modal>
   );
 }
+
+function toM(s: string) { const [h, m] = s.split(":").map(Number); return (h || 0) * 60 + (m || 0); }

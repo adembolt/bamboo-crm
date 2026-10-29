@@ -31,3 +31,8 @@ export function makeT(lang: Lang): TFn {
 export function localName(o: { name_tr: string; name_en?: string | null; name_ru?: string | null }, lang: Lang) {
   return (lang === "en" ? o.name_en : lang === "ru" ? o.name_ru : null) || o.name_tr;
 }
+
+/** Personel unvanı: title_en / title_ru doluysa onu, yoksa Türkçe */
+export function staffTitle(s: { title: string; title_en?: string | null; title_ru?: string | null }, lang: Lang) {
+  return (lang === "en" ? s.title_en : lang === "ru" ? s.title_ru : null) || s.title;
+}

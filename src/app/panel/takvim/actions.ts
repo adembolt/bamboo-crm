@@ -156,8 +156,10 @@ export async function deleteItem(itemId: string) {
 export async function moveItem(itemId: string, date: string, startHHMM: string, staffId: string | null) {
   const { supabase } = await requireOps();
   const t = await getT();
-  const { data: item } = await supabase.from("visit_items").select("starts_at, ends_at").eq("id", itemId).single();
+  const { data: item } = await supabase.from("visit_items").select("starts_at, ends_at, visit_id").eq("id", itemId).single();
   if (!item) return { ok: false as const, error: t("Kalem bulunamadı.") };
+  const { count } = await supabase.from("sales").select("id", { count: "exact", head: true }).eq("visit_id", item.visit_id);
+  if (count) return { ok: false as const, error: t("Ödemesi alınmış randevu taşınamaz. Önce kasadan satışı iptal edin.") };
   const dur = new Date(item.ends_at).getTime() - new Date(item.starts_at).getTime();
   const startsAt = localToIso(date, startHHMM);
   const endsAt = new Date(new Date(startsAt).getTime() + dur).toISOString();
@@ -165,6 +167,23 @@ export async function moveItem(itemId: string, date: string, startHHMM: string, 
   if (error) {
     return { ok: false as const, error: error.message.includes("overlap") ? t("O saatte personel dolu.") : error.message };
   }
+  await supabase.from("visits").update({ visit_date: date }).eq("id", item.visit_id);
+  revalidatePath("/panel/takvim");
+  return { ok: true as const };
+}
+
+/** Takvimde kartın alt kenarından sürükleyerek süre değiştirme */
+export async function resizeItem(itemId: string, durationMin: number) {
+  const { supabase } = await requireOps();
+  const t = await getT();
+  if (!(durationMin >= 5 && durationMin <= 12 * 60)) return { ok: false as const, error: t("Süre geçersiz.") };
+  const { data: item } = await supabase.from("visit_items").select("starts_at, visit_id").eq("id", itemId).single();
+  if (!item) return { ok: false as const, error: t("Kalem bulunamadı.") };
+  const { count } = await supabase.from("sales").select("id", { count: "exact", head: true }).eq("visit_id", item.visit_id);
+  if (count) return { ok: false as const, error: t("Ödemesi alınmış randevu değiştirilemez. Önce kasadan satışı iptal edin.") };
+  const endsAt = new Date(new Date(item.starts_at).getTime() + durationMin * 60000).toISOString();
+  const { error } = await supabase.from("visit_items").update({ ends_at: endsAt }).eq("id", itemId);
+  if (error) return { ok: false as const, error: error.message.includes("overlap") ? t("O saatte personel dolu.") : error.message };
   revalidatePath("/panel/takvim");
   return { ok: true as const };
 }

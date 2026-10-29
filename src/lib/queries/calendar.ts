@@ -30,7 +30,7 @@ export async function loadDay(supabase: SupabaseClient<Database>, isoDate: strin
   const dayStart = new Date(`${isoDate}T00:00:00+03:00`).toISOString();
   const dayEnd = new Date(`${isoDate}T23:59:59+03:00`).toISOString();
 
-  const [staffRes, itemsRes, settingsRes, timeOffRes] = await Promise.all([
+  const [staffRes, itemsRes, settingsRes, timeOffRes, schedRes] = await Promise.all([
     supabase.from("staff").select("*").eq("is_active", true).order("sort_order").order("full_name"),
     supabase
       .from("visit_items")
@@ -42,6 +42,7 @@ export async function loadDay(supabase: SupabaseClient<Database>, isoDate: strin
       .order("starts_at"),
     supabase.from("settings").select("*").eq("id", 1).single(),
     supabase.from("staff_time_off").select("*").lte("starts_at", dayEnd).gte("ends_at", dayStart),
+    supabase.from("staff_schedules").select("staff_id, weekday, start_time, end_time"),
   ]);
 
   return {
@@ -49,6 +50,7 @@ export async function loadDay(supabase: SupabaseClient<Database>, isoDate: strin
     items: (itemsRes.data ?? []) as unknown as DayItem[],
     settings: settingsRes.data!,
     timeOff: timeOffRes.data ?? [],
+    schedules: schedRes.data ?? [],
   };
 }
 

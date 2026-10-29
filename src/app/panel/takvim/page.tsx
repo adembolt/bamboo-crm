@@ -47,6 +47,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           staff={day.staff}
           items={day.items}
           timeOff={day.timeOff}
+          schedules={day.schedules}
           settings={{ open_time: day.settings.open_time, close_time: day.settings.close_time, slot_minutes: day.settings.slot_minutes }}
           services={picker.services}
           categories={picker.categories}
