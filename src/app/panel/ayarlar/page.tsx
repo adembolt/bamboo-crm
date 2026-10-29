@@ -21,7 +21,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/panel/a
   const days = Array.from({ length: 7 }, (_, i) => fmtWeekdayShort(addDays("2024-01-01", i), lang)); // 2024-01-01 = Pazartesi
   return (
     <div className="grid gap-4 max-w-2xl">
-      <header><h1 className="text-xl font-bold">{t("Ayarlar")}</h1><p className="text-sm text-muted">{t("İşletme bilgileri, çalışma saatleri ve online randevu kuralları")}</p>{canManage && <Link href="/panel/ayarlar/whatsapp" className="text-sm font-semibold text-green">{t("WhatsApp bağlantısı")} →</Link>}</header>
+      <header><h1 className="text-xl font-bold">{t("Ayarlar")}</h1><p className="text-sm text-muted">{t("İşletme bilgileri, çalışma saatleri ve online randevu kuralları")}</p>{canManage && <span className="flex gap-4 flex-wrap"><Link href="/panel/ayarlar/whatsapp" className="text-sm font-semibold text-green">{t("WhatsApp bağlantısı")} →</Link><Link href="/panel/ayarlar/dikidi" className="text-sm font-semibold text-green">{t("DIKIDI eşitleme")} →</Link></span>}</header>
       <div className="panel grid gap-1">
         <div className="eyebrow">{t("Online randevu sayfası")}</div>
         <div className="flex flex-wrap gap-2 items-center">
