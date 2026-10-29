@@ -249,12 +249,17 @@ export async function POST(req: NextRequest) {
     // ödeme satırları: (isim, gün) → kasa hareketleri; satışa önce aynı dakika, sonra en yakın saat eşlenir, her satır bir kez kullanılır
     type Pay = { id: string; method: PayMethod; amount: number; min: number };
     const pays = new Map<string, Pay[]>();
+    const byDate = new Map<string, Pay[]>();
     for (const c of cash) {
       if (c.sum !== "debt" || !/sales|продаж/i.test(c.type)) continue;
       const m = c.dt.match(/(\d{2})\.(\d{2})\.(\d{4}) в (\d{2}):(\d{2})/); if (!m) continue;
       const k = `${sortedName(c.who)}|${m[3]}-${m[2]}-${m[1]}`;
       const amount = Number(String(c.amt).replace(/[^\d.,-]/g, "").replace(",", ".")) || 0;
-      if (amount > 0) pays.set(k, [...(pays.get(k) ?? []), { id: c.id, method: /касса|cash/i.test(c.acc) ? "cash" : "card", amount, min: Number(m[4]) * 60 + Number(m[5]) }]);
+      if (amount > 0) {
+        const p = { id: c.id, method: (/касса|cash/i.test(c.acc) ? "cash" : "card") as PayMethod, amount, min: Number(m[4]) * 60 + Number(m[5]) };
+        pays.set(k, [...(pays.get(k) ?? []), p]);
+        const dk = `${m[3]}-${m[2]}-${m[1]}`; byDate.set(dk, [...(byDate.get(dk) ?? []), p]);
+      }
     }
     const usedPay = new Set<string>();
     const takePays = (name: string, date: string, time: string, total: number) => {
@@ -263,6 +268,12 @@ export async function POST(req: NextRequest) {
       list.sort((a, b) => Math.abs(a.min - tm) - Math.abs(b.min - tm));
       const out: { method: PayMethod; amount: number }[] = []; let sum = 0;
       for (const p of list) { if (sum >= total - 0.5) break; if (Math.abs(p.min - tm) > 240 && out.length) break; usedPay.add(p.id); out.push({ method: p.method, amount: p.amount }); sum += p.amount; }
+      // isim tutmadıysa: aynı gün, kalan tutarla birebir aynı ve saati yakın (±60 dk) kullanılmamış hareket
+      const rest = total - sum;
+      if (rest > 0.5) {
+        const alt = (byDate.get(date) ?? []).filter((p) => !usedPay.has(p.id) && Math.abs(p.amount - rest) < 1 && Math.abs(p.min - tm) <= 60).sort((a, b) => Math.abs(a.min - tm) - Math.abs(b.min - tm))[0];
+        if (alt) { usedPay.add(alt.id); out.push({ method: alt.method, amount: alt.amount }); }
+      }
       return out;
     };
 
