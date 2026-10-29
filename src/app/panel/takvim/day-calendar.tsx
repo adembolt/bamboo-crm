@@ -52,13 +52,23 @@ export function DayCalendar(props: {
   const svcById = useMemo(() => new Map(props.services.map((s) => [s.id, s])), [props.services]);
   // kayıtlı ad Türkçe; başka dilde katalogdaki çeviri gösterilir
   const svcName = (it: { service_id: string | null; service_name: string }) => { const s = lang !== "tr" && it.service_id ? svcById.get(it.service_id) : undefined; return s ? localName(s, lang) : it.service_name; };
-  const openMin = toMin(settings.open_time);
-  const closeMin = toMin(settings.close_time);
+  const salonOpen = toMin(settings.open_time);
+  const salonClose = toMin(settings.close_time);
+  // Görünen saat aralığı: salon saatleri, o gün(ler) personelin uzatılmış çalışma saatleri ve randevular hangisi genişse
+  const [openMin, closeMin] = useMemo(() => {
+    let lo = salonOpen, hi = salonClose;
+    const dates = props.week ? props.week.dates : [date];
+    for (const d of dates) for (const s of staff) {
+      for (const [a, b] of workWindows(s.id, weekdayOf(d), props.schedules, salonOpen, salonClose, { mode: s.schedule_mode, date: d, rows: props.dayHours })) { lo = Math.min(lo, a); hi = Math.max(hi, b); }
+    }
+    for (const it of items) { if (it.status === "cancelled") continue; lo = Math.min(lo, minutesOfDay(it.starts_at)); const e = minutesOfDay(it.ends_at); hi = Math.max(hi, e < minutesOfDay(it.starts_at) ? 1440 : e); }
+    return [Math.max(0, Math.floor(lo / 60) * 60), Math.min(1440, Math.ceil(hi / 60) * 60)];
+  }, [salonOpen, salonClose, props.week, date, staff, props.schedules, props.dayHours, items]);
   const totalMin = closeMin - openMin;
   // personelin bir gündeki çalışma pencereleri / izinleri
   const hoursFor = (staffId: string, d: string) => {
     const mode = staff.find((x) => x.id === staffId)?.schedule_mode;
-    const w = workWindows(staffId, weekdayOf(d), props.schedules, openMin, closeMin, { mode, date: d, rows: props.dayHours });
+    const w = workWindows(staffId, weekdayOf(d), props.schedules, salonOpen, salonClose, { mode, date: d, rows: props.dayHours });
     const o = offBlocks(staffId, d, props.timeOff);
     const fullOff = o.some((x) => x.a <= openMin && x.b >= closeMin);
     return { w, o, grey: offHours(w, openMin, closeMin), working: w.length > 0 && !fullOff, fullOff };
@@ -406,8 +416,8 @@ export function DayCalendar(props: {
           categories={props.categories}
           staffServices={props.staffServices}
           overrides={props.overrides}
-          openTime={settings.open_time}
-          closeTime={settings.close_time}
+          openTime={hhmm(openMin)}
+          closeTime={hhmm(Math.min(closeMin, 1439))}
           canWrite={canWrite}
           onClose={() => setSelectedVisit(null)}
         />

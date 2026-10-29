@@ -75,8 +75,9 @@ export async function getSlots(opts: { serviceId: string; staffId: string | null
     ];
     const need = needFor(sid);
     for (const [ws, we] of windows) {
-      for (let t = Math.ceil(ws / step) * step; t + need <= Math.min(we, closeMin); t += step) {
-        if (t < openMin || t <= nowMin) continue;
+      // personelin o günkü penceresi esas (uzatılmış mesai salon saatini aşabilir)
+      for (let t = Math.ceil(ws / step) * step; t + need <= we; t += step) {
+        if (t <= nowMin) continue;
         const clash = blocks.some(([a, b]) => t < b && t + need > a);
         if (clash || !roomFree(t, t + need)) continue;
         const key = hhmm(t);
