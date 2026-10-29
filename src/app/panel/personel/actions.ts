@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/auth";
+import { getT } from "@/lib/i18n/server";
 
 export async function saveStaff(_prev: { error: string; saved?: boolean }, formData: FormData) {
   const { supabase } = await requireManager();
@@ -17,7 +18,7 @@ export async function saveStaff(_prev: { error: string; saved?: boolean }, formD
     product_percent: Number(formData.get("product_percent") ?? 0) || 0,
     is_active: formData.get("is_active") === "on",
   };
-  if (!payload.full_name) return { error: "Ad gerekli." };
+  if (!payload.full_name) return { error: (await getT())("Ad gerekli.") };
   const res = id ? await supabase.from("staff").update(payload).eq("id", id) : await supabase.from("staff").insert(payload);
   if (res.error) return { error: res.error.message };
   revalidatePath("/panel/personel");
@@ -47,7 +48,7 @@ export async function setStaffServices(staffId: string, serviceIds: string[]) {
 
 export async function setStaffPhoto(staffId: string, url: string | null) {
   const { supabase } = await requireManager();
-  if (url && !/^https:\/\/[a-z0-9]+\.supabase\.co\/storage\/v1\/object\/public\/staff-photos\//.test(url)) return { ok: false as const, error: "Geçersiz adres." };
+  if (url && !/^https:\/\/[a-z0-9]+\.supabase\.co\/storage\/v1\/object\/public\/staff-photos\//.test(url)) return { ok: false as const, error: (await getT())("Geçersiz adres.") };
   const { error } = await supabase.from("staff").update({ photo_url: url }).eq("id", staffId);
   if (error) return { ok: false as const, error: error.message };
   revalidatePath("/panel/takvim"); revalidatePath("/panel/personel");

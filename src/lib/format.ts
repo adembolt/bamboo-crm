@@ -16,8 +16,10 @@ export function fmtTime(iso: string | Date) {
   return new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit", timeZone: TZ }).format(d);
 }
 
-export function fmtDateLong(isoDate: string) {
-  return new Intl.DateTimeFormat("tr-TR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: TZ }).format(new Date(isoDate + "T12:00:00"));
+const LOC: Record<string, string> = { tr: "tr-TR", en: "en-GB", ru: "ru-RU" };
+
+export function fmtDateLong(isoDate: string, lang = "tr") {
+  return new Intl.DateTimeFormat(LOC[lang] ?? "tr-TR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: TZ }).format(new Date(isoDate + "T12:00:00"));
 }
 
 /** YYYY-MM-DD (İstanbul'a göre bugün) */
@@ -50,10 +52,25 @@ export function hhmm(minutes: number) {
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
-export function duration(min: number) {
-  const h = Math.floor(min / 60), m = min % 60;
-  return h && m ? `${h} sa ${m} dk` : h ? `${h} sa` : `${m} dk`;
+/** "Ekim 2026" / "October 2026" / "октябрь 2026" */
+export function fmtMonthYear(isoDate: string, lang = "tr") {
+  return new Intl.DateTimeFormat(LOC[lang] ?? "tr-TR", { month: "long", year: "numeric", timeZone: TZ }).format(new Date(isoDate.slice(0, 10) + "T12:00:00"));
 }
+
+/** Kısa gün adı: Pzt / Mon / пн */
+export function fmtWeekdayShort(isoDate: string, lang = "tr") {
+  return new Intl.DateTimeFormat(LOC[lang] ?? "tr-TR", { weekday: "short", timeZone: TZ }).format(new Date(isoDate.slice(0, 10) + "T12:00:00"));
+}
+
+const DUR: Record<string, [string, string]> = { tr: ["sa", "dk"], en: ["h", "min"], ru: ["ч", "мин"] };
+export function duration(min: number, lang = "tr") {
+  const h = Math.floor(min / 60), m = min % 60;
+  const [H, M] = DUR[lang] ?? DUR.tr;
+  return h && m ? `${h} ${H} ${m} ${M}` : h ? `${h} ${H}` : `${m} ${M}`;
+}
+
+/** "dk" kısaltması dile göre */
+export function minLabel(lang = "tr") { return (DUR[lang] ?? DUR.tr)[1]; }
 
 export function initials(first: string, last: string) {
   return ((first[0] ?? "") + (last[0] ?? "")).toUpperCase();

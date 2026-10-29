@@ -5,10 +5,14 @@ import { fullName, initials, fmtDate, fmtTime, money } from "@/lib/format";
 import { CustomerEditForm } from "./edit-form";
 import type { Customer } from "@/lib/database.types";
 import { PackagePanel, BalancePanel } from "./package-sale";
+import { getT } from "@/lib/i18n/server";
+
+const VISIT_STATUS: Record<string, string> = { pending: "Onay bekliyor", confirmed: "Onaylı", arrived: "Geldi", completed: "Tamamlandı", no_show: "Gelmedi", cancelled: "İptal" };
 
 export default async function CustomerPage({ params }: PageProps<"/panel/musteriler/[id]">) {
   const { id } = await params;
   const { supabase, profile } = await requireSession();
+  const t = await getT();
   const canWrite = !!profile && ["owner", "manager", "reception"].includes(profile.role);
   const isManager = !!profile && ["owner", "manager"].includes(profile.role);
 
@@ -46,24 +50,24 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
         <span className="w-12 h-12 rounded-full bg-green-soft text-green grid place-items-center font-bold">{initials(customer.first_name, customer.last_name)}</span>
         <div className="min-w-0">
           <h1 className="text-xl font-bold">{fullName(customer)}</h1>
-          <p className="text-sm text-muted">{customer.phone || "telefon yok"}{customer.email ? ` · ${customer.email}` : ""}</p>
+          <p className="text-sm text-muted">{customer.phone || t("telefon yok")}{customer.email ? ` · ${customer.email}` : ""}</p>
         </div>
         <div className="ml-auto flex gap-2 flex-wrap">
           {customer.phone && <a className="btn ghost sm" href={`https://wa.me/${customer.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer">WhatsApp</a>}
-          <Link className="btn sm" href={`/panel/takvim`}>Randevu ver</Link>
+          <Link className="btn sm" href={`/panel/takvim`}>{t("Randevu ver")}</Link>
         </div>
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Ziyaret" value={String(totals.length)} />
-        <Stat label="Toplam harcama" value={money(spent)} />
-        <Stat label="Ortalama fiş" value={totals.length ? money(spent / totals.length) : "—"} />
-        <Stat label="Son ziyaret" value={lastVisit ? fmtDate(lastVisit) : "—"} />
+        <Stat label={t("Ziyaret")} value={String(totals.length)} />
+        <Stat label={t("Toplam harcama")} value={money(spent)} />
+        <Stat label={t("Ortalama fiş")} value={totals.length ? money(spent / totals.length) : "—"} />
+        <Stat label={t("Son ziyaret")} value={lastVisit ? fmtDate(lastVisit) : "—"} />
       </div>
 
       <div className="grid md:grid-cols-[1fr_1.2fr] gap-4 items-start">
         <section className="panel grid gap-3">
-          <h2 className="text-lg font-bold">Müşteri kartı</h2>
+          <h2 className="text-lg font-bold">{t("Müşteri kartı")}</h2>
           <CustomerEditForm customer={customer} canWrite={canWrite} />
         </section>
 
@@ -72,13 +76,13 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
           <PackagePanel customerId={id} packages={(packages ?? []).map((p) => ({ ...p, price_paid: Number(p.price_paid) }))} services={(services ?? []).map((s) => ({ ...s, price: Number(s.price) }))} staff={staff ?? []} defaultMonths={settings?.package_default_months ?? 6} canWrite={canWrite} isManager={isManager} points={customer.loyalty_points} />
           {ledger && ledger.length > 0 && (
             <section className="panel grid gap-1">
-              <h2 className="font-bold">Puan hareketleri</h2>
+              <h2 className="font-bold">{t("Puan hareketleri")}</h2>
               {ledger.map((l, i) => <div key={i} className="text-sm grid grid-cols-[auto_1fr_auto] gap-2"><span className="num text-muted">{fmtDate(l.created_at)}</span><span className="truncate">{l.reason}</span><span className={`num font-semibold ${l.points > 0 ? "text-good" : "text-bad"}`}>{l.points > 0 ? "+" : ""}{l.points}</span></div>)}
             </section>
           )}
           <section className="panel grid gap-2">
-            <h2 className="text-lg font-bold">Ziyaret geçmişi</h2>
-            {!vis.length && <p className="text-sm text-muted">Henüz ziyaret yok.</p>}
+            <h2 className="text-lg font-bold">{t("Ziyaret geçmişi")}</h2>
+            {!vis.length && <p className="text-sm text-muted">{t("Henüz ziyaret yok.")}</p>}
             {vis.map((v) => {
               const items = [...v.items].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
               const sub = items.filter((i) => i.status !== "cancelled").reduce((s, i) => s + Number(i.price) - Number(i.discount), 0);
@@ -86,7 +90,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
                 <div key={v.id} className="rounded-xl border border-line px-3 py-2 grid gap-1">
                   <div className="flex items-center gap-2">
                     <Link href={`/panel/takvim?d=${v.visit_date}`} className="font-bold hover:underline">{fmtDate(v.visit_date)}</Link>
-                    <span className={`pill ${v.status === "completed" ? "good" : v.status === "no_show" || v.status === "cancelled" ? "bad" : ""}`}>{{ pending: "Onay bekliyor", confirmed: "Onaylı", arrived: "Geldi", completed: "Tamamlandı", no_show: "Gelmedi", cancelled: "İptal" }[v.status]}</span>
+                    <span className={`pill ${v.status === "completed" ? "good" : v.status === "no_show" || v.status === "cancelled" ? "bad" : ""}`}>{t(VISIT_STATUS[v.status] ?? v.status)}</span>
                     <span className="ml-auto num font-bold">{money(Math.round(sub * (1 - Number(v.discount_percent) / 100)))}</span>
                   </div>
                   {items.map((i) => (

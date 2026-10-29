@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireOps } from "@/lib/auth";
 import { localToIso, todayIso, normalizePhone } from "@/lib/format";
 import type { VisitStatus } from "@/lib/database.types";
+import { getT } from "@/lib/i18n/server";
 
 const ISTANBUL = (iso: string) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Istanbul" }).format(new Date(iso));
 const HHMM = (iso: string) => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/Istanbul" }).format(new Date(iso));
@@ -10,10 +11,11 @@ const HHMM = (iso: string) => new Intl.DateTimeFormat("en-GB", { hour: "2-digit"
 /** Düzenleme ekranı için ziyaretin tüm ayrıntıları */
 export async function getVisitDetail(visitId: string) {
   const { supabase } = await requireOps();
+  const t = await getT();
   const { data: v } = await supabase.from("visits")
     .select("id, visit_date, status, source, notes, color, is_anonymous, remind_offsets, remind_confirm, review_request, promo_code, discount_percent, created_at, customer:customers(id, first_name, last_name, phone, email, notes, health_notes, no_show_count, balance, loyalty_points, tags, locale), items:visit_items(id, service_id, service_name, staff_id, starts_at, ends_at, price, discount, status, break_min, package_id, service:services(duration_min))")
     .eq("id", visitId).single();
-  if (!v) return { ok: false as const, error: "Ziyaret bulunamadı." };
+  if (!v) return { ok: false as const, error: t("Ziyaret bulunamadı.") };
   const cid = v.customer?.id;
   const [{ data: hist }, { data: msgs }, { data: files }, { data: audit }, { data: sale }] = await Promise.all([
     cid ? supabase.from("visits").select("id, visit_date, status, items:visit_items(service_name, price, discount, staff:staff(full_name))").eq("customer_id", cid).neq("id", visitId).order("visit_date", { ascending: false }).limit(12) : Promise.resolve({ data: [] as never[] }),
@@ -59,19 +61,20 @@ async function audit(action: string, visitId: string, diff: unknown) {
 
 export async function saveVisit(input: SaveVisitInput) {
   const { supabase } = await requireOps();
+  const t = await getT();
   const lines = input.lines.filter((l) => l.serviceName.trim());
-  if (!lines.length) return { ok: false as const, error: "En az bir hizmet olmalı." };
-  for (const l of lines) if (!/^\d{2}:\d{2}$/.test(l.time) || !(l.duration > 0)) return { ok: false as const, error: "Saat ve süre geçerli olmalı." };
+  if (!lines.length) return { ok: false as const, error: t("En az bir hizmet olmalı.") };
+  for (const l of lines) if (!/^\d{2}:\d{2}$/.test(l.time) || !(l.duration > 0)) return { ok: false as const, error: t("Saat ve süre geçerli olmalı.") };
 
   const { data: before } = await supabase.from("visits").select("visit_date, status, customer_id, notes, color, items:visit_items(id, service_name, staff_id, starts_at, price, discount)").eq("id", input.visitId).single();
-  if (!before) return { ok: false as const, error: "Ziyaret bulunamadı." };
+  if (!before) return { ok: false as const, error: t("Ziyaret bulunamadı.") };
 
   const { error: ve } = await supabase.from("visits").update({
     visit_date: input.date, customer_id: input.isAnonymous ? null : input.customerId, is_anonymous: input.isAnonymous, status: input.status,
     notes: input.notes, color: input.color, remind_offsets: input.remindOffsets, remind_confirm: input.remindConfirm,
     review_request: input.reviewRequest, promo_code: input.promoCode.trim().toUpperCase(),
   }).eq("id", input.visitId);
-  if (ve) return { ok: false as const, error: ve.message.includes("visits_one_per_customer_day") ? "Bu müşterinin o gün başka bir ziyareti var; hizmeti oraya ekleyin." : ve.message };
+  if (ve) return { ok: false as const, error: ve.message.includes("visits_one_per_customer_day") ? t("Bu müşterinin o gün başka bir ziyareti var; hizmeti oraya ekleyin.") : ve.message };
 
   // Son satıra mola eklenir (ends_at uzar → çakışma kontrolü molayı da kapsar)
   const order = lines.map((l, i) => ({ l, i })).sort((a, b) => a.l.time.localeCompare(b.l.time));
@@ -91,7 +94,7 @@ export async function saveVisit(input: SaveVisitInput) {
     if (error) {
       // geri al: kalanları eski durumlarına döndür
       if (keep.size) await supabase.from("visit_items").update({ status: before.status as VisitStatus }).in("id", [...keep]).eq("status", "cancelled");
-      return { ok: false as const, error: /overlap|23P01/.test(error.message + error.code) ? `${l.time} — bu personelin o saatte başka randevusu var.` : error.message };
+      return { ok: false as const, error: /overlap|23P01/.test(error.message + error.code) ? t("{time} — bu personelin o saatte başka randevusu var.", { time: l.time }) : error.message };
     }
   }
 
@@ -135,21 +138,22 @@ export async function setVisitFlag(visitId: string, status: VisitStatus) {
 /** Aynı hizmetleri başka tarihe kopyalar (aynı saat, aynı personel) */
 export async function repeatVisit(visitId: string, targetDate: string) {
   const { supabase, user } = await requireOps();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) return { ok: false as const, error: "Tarih geçersiz." };
+  const t = await getT();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) return { ok: false as const, error: t("Tarih geçersiz.") };
   const { data: v } = await supabase.from("visits").select("customer_id, notes, color, remind_offsets, remind_confirm, review_request, items:visit_items(service_id, service_name, staff_id, starts_at, ends_at, price, discount, status, break_min)").eq("id", visitId).single();
-  if (!v) return { ok: false as const, error: "Ziyaret bulunamadı." };
+  if (!v) return { ok: false as const, error: t("Ziyaret bulunamadı.") };
   let target: string | null = null;
   if (v.customer_id) { const { data: ex } = await supabase.from("visits").select("id").eq("customer_id", v.customer_id).eq("visit_date", targetDate).neq("status", "cancelled").maybeSingle(); target = ex?.id ?? null; }
   if (!target) {
     const { data: nv, error } = await supabase.from("visits").insert({ customer_id: v.customer_id, visit_date: targetDate, status: "confirmed", source: "salon", notes: v.notes, color: v.color, remind_offsets: v.remind_offsets, remind_confirm: v.remind_confirm, review_request: v.review_request, created_by: user.id }).select("id").single();
-    if (error || !nv) return { ok: false as const, error: error?.message ?? "Ziyaret açılamadı" };
+    if (error || !nv) return { ok: false as const, error: error?.message ?? t("Ziyaret açılamadı") };
     target = nv.id;
   }
   for (const i of v.items.filter((x) => x.status !== "cancelled")) {
     const starts = localToIso(targetDate, HHMM(i.starts_at));
     const ends = new Date(new Date(starts).getTime() + (new Date(i.ends_at).getTime() - new Date(i.starts_at).getTime())).toISOString();
     const { error } = await supabase.from("visit_items").insert({ visit_id: target, service_id: i.service_id, service_name: i.service_name, staff_id: i.staff_id, starts_at: starts, ends_at: ends, price: Number(i.price), discount: Number(i.discount), break_min: i.break_min, status: "confirmed" });
-    if (error) return { ok: false as const, error: /overlap|23P01/.test(error.message + error.code) ? `${targetDate} ${HHMM(i.starts_at)} — personel o saatte dolu.` : error.message };
+    if (error) return { ok: false as const, error: /overlap|23P01/.test(error.message + error.code) ? t("{when} — personel o saatte dolu.", { when: `${targetDate} ${HHMM(i.starts_at)}` }) : error.message };
   }
   await audit("tekrarlandı", visitId, { to: targetDate, visit: target });
   revalidatePath("/panel/takvim");
@@ -158,11 +162,12 @@ export async function repeatVisit(visitId: string, targetDate: string) {
 
 export async function checkPromo(code: string) {
   const { supabase } = await requireOps();
+  const t = await getT();
   const c = code.trim().toUpperCase();
-  if (!c) return { ok: false as const, error: "Kod girin." };
+  if (!c) return { ok: false as const, error: t("Kod girin.") };
   const { data } = await supabase.from("promo_codes").select("percent, description, valid_until, is_active").eq("code", c).maybeSingle();
-  if (!data || !data.is_active) return { ok: false as const, error: "Geçersiz kod." };
-  if (data.valid_until && data.valid_until < todayIso()) return { ok: false as const, error: "Kodun süresi dolmuş." };
+  if (!data || !data.is_active) return { ok: false as const, error: t("Geçersiz kod.") };
+  if (data.valid_until && data.valid_until < todayIso()) return { ok: false as const, error: t("Kodun süresi dolmuş.") };
   return { ok: true as const, percent: Number(data.percent), description: data.description };
 }
 
@@ -176,8 +181,9 @@ export async function addVisitFile(input: { visitId: string; customerId: string 
 
 export async function deleteVisitFile(id: string) {
   const { supabase } = await requireOps();
+  const t = await getT();
   const { data: f } = await supabase.from("visit_files").select("visit_id, storage_path, file_name").eq("id", id).single();
-  if (!f) return { ok: false as const, error: "Dosya yok." };
+  if (!f) return { ok: false as const, error: t("Dosya yok.") };
   await supabase.storage.from("visit-files").remove([f.storage_path]);
   await supabase.from("visit_files").delete().eq("id", id);
   await audit("dosya silindi", f.visit_id, { file: f.file_name });
@@ -196,14 +202,15 @@ export async function staffDayItems(date: string) {
 /** Düzenleme ekranında yeni müşteri: telefon kayıtlıysa onu döndürür */
 export async function quickCustomer(input: { first_name: string; last_name: string; phone: string }) {
   const { supabase } = await requireOps();
+  const t = await getT();
   const first = input.first_name.trim();
-  if (!first) return { ok: false as const, error: "Ad gerekli." };
+  if (!first) return { ok: false as const, error: t("Ad gerekli.") };
   const phone = normalizePhone(input.phone ?? "");
   if (phone) {
     const { data: ex } = await supabase.from("customers").select("id, first_name, last_name, phone").eq("phone", phone).maybeSingle();
     if (ex) return { ok: true as const, customer: ex };
   }
   const { data, error } = await supabase.from("customers").insert({ first_name: first, last_name: input.last_name.trim(), phone, source: "salon" }).select("id, first_name, last_name, phone").single();
-  if (error || !data) return { ok: false as const, error: error?.message ?? "Müşteri oluşturulamadı" };
+  if (error || !data) return { ok: false as const, error: error?.message ?? t("Müşteri oluşturulamadı") };
   return { ok: true as const, customer: data };
 }

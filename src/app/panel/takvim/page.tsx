@@ -5,13 +5,18 @@ import { todayIso, addDays, fmtDateLong } from "@/lib/format";
 import { DayCalendar } from "./day-calendar";
 import { MiniCalendar, KasaSnapshot } from "./side-panel";
 import { loadKasaDay, summarize } from "@/lib/queries/kasa";
+import { getT, getLang } from "@/lib/i18n/server";
 
-export const metadata = { title: "Takvim" };
+export async function generateMetadata() {
+  const t = await getT();
+  return { title: t("Takvim") };
+}
 
 export default async function CalendarPage({ searchParams }: PageProps<"/panel/takvim">) {
   const sp = await searchParams;
   const d = typeof sp.d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.d) ? sp.d : todayIso();
   const { supabase, profile } = await requireSession();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const monthStart = d.slice(0, 7) + "-01";
   const monthEnd = new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0)).toISOString().slice(0, 10);
   const [day, picker, kasa, { data: monthVisits }, { data: ssRows }] = await Promise.all([
@@ -28,10 +33,10 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
   return (
     <div className="grid gap-4">
       <header className="flex items-center gap-3 flex-wrap">
-        <Link className="btn ghost sm" href={`/panel/takvim?d=${addDays(d, -1)}`} aria-label="Önceki gün">‹</Link>
-        <h1 className="text-xl font-bold capitalize">{fmtDateLong(d)}</h1>
-        <Link className="btn ghost sm" href={`/panel/takvim?d=${addDays(d, 1)}`} aria-label="Sonraki gün">›</Link>
-        {d !== todayIso() && <Link className="btn ghost sm" href="/panel/takvim">Bugün</Link>}
+        <Link className="btn ghost sm" href={`/panel/takvim?d=${addDays(d, -1)}`} aria-label={t("Önceki gün")}>‹</Link>
+        <h1 className="text-xl font-bold capitalize">{fmtDateLong(d, lang)}</h1>
+        <Link className="btn ghost sm" href={`/panel/takvim?d=${addDays(d, 1)}`} aria-label={t("Sonraki gün")}>›</Link>
+        {d !== todayIso() && <Link className="btn ghost sm" href="/panel/takvim">{t("Bugün")}</Link>}
         <form className="ml-auto" action="/panel/takvim">
           <span className="inp"><input type="date" name="d" defaultValue={d} /></span>
         </form>

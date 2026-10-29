@@ -1,10 +1,12 @@
 "use client";
 import { useState } from "react";
 import { money } from "@/lib/format";
+import { useT } from "@/lib/i18n/client";
 
 import { SERIES, type Slice } from "@/lib/charts";
 
-export function Donut({ title, slices, total, format = money, empty = "Veri yok", bare }: { title: string; slices: Slice[]; total?: number; format?: (n: number) => string; empty?: string; bare?: boolean }) {
+export function Donut({ title, slices, total, format = money, empty, bare }: { title: string; slices: Slice[]; total?: number; format?: (n: number) => string; empty?: string; bare?: boolean }) {
+  const t = useT();
   const [hover, setHover] = useState<number | null>(null);
   const sum = slices.reduce((a, s) => a + s.value, 0);
   const R = 56, r = 38, C = 70;
@@ -26,7 +28,7 @@ export function Donut({ title, slices, total, format = money, empty = "Veri yok"
   return (
     <figure className={`${bare ? "" : "panel "}grid gap-3 m-0`}>
       {title && <figcaption className="font-bold">{title}</figcaption>}
-      {!sum ? <p className="text-sm text-muted">{empty}</p> : (
+      {!sum ? <p className="text-sm text-muted">{empty ?? t("Veri yok")}</p> : (
         <div className="grid grid-cols-[140px_1fr] gap-3 items-center">
           <svg viewBox="0 0 140 140" width="140" height="140" role="img" aria-label={title}>
             {single && (
@@ -41,7 +43,7 @@ export function Donut({ title, slices, total, format = money, empty = "Veri yok"
               </path>
             ))}
             <text x={C} y={C - 4} textAnchor="middle" className="fill-[var(--ink)]" style={{ font: "700 13px var(--font-display)" }}>{active ? `${Math.round((active.value / sum) * 100)}%` : format(total ?? sum)}</text>
-            <text x={C} y={C + 12} textAnchor="middle" style={{ font: "600 9px var(--font-sans)", fill: "var(--muted)" }}>{active ? active.label.slice(0, 16) : "toplam"}</text>
+            <text x={C} y={C + 12} textAnchor="middle" style={{ font: "600 9px var(--font-sans)", fill: "var(--muted)" }}>{active ? active.label.slice(0, 16) : t("toplam")}</text>
           </svg>
           <ul className="grid gap-1 text-sm m-0 p-0 list-none">
             {slices.map((s, i) => (
@@ -60,6 +62,7 @@ export function Donut({ title, slices, total, format = money, empty = "Veri yok"
 }
 
 export function Bars({ title, points, format = money, color = SERIES[5] }: { title: string; points: { label: string; value: number; href?: string }[]; format?: (n: number) => string; color?: string }) {
+  const t = useT();
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(1, ...points.map((p) => p.value));
   const W = 960, H = 220, L = 8, B = 24, T = 10;
@@ -67,8 +70,8 @@ export function Bars({ title, points, format = money, color = SERIES[5] }: { tit
   const total = points.reduce((a, p) => a + p.value, 0);
   return (
     <figure className="panel grid gap-2 m-0">
-      <div className="flex items-baseline justify-between"><figcaption className="font-bold">{title}</figcaption><span className="text-xs text-muted">{hover !== null ? `${points[hover].label}: ${format(points[hover].value)}` : `toplam ${format(total)}`}</span></div>
-      {!total ? <p className="text-sm text-muted">Veri yok</p> : (
+      <div className="flex items-baseline justify-between"><figcaption className="font-bold">{title}</figcaption><span className="text-xs text-muted">{hover !== null ? `${points[hover].label}: ${format(points[hover].value)}` : t("toplam {total}", { total: format(total) })}</span></div>
+      {!total ? <p className="text-sm text-muted">{t("Veri yok")}</p> : (
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={title}>
           {[0.25, 0.5, 0.75, 1].map((f) => <line key={f} x1={L} x2={W} y1={T + (H - B - T) * (1 - f)} y2={T + (H - B - T) * (1 - f)} stroke="var(--line)" strokeWidth="1" />)}
           <line x1={L} x2={W} y1={H - B} y2={H - B} stroke="var(--muted)" strokeWidth="1" />

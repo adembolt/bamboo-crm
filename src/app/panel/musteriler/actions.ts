@@ -3,11 +3,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireOps } from "@/lib/auth";
 import { normalizePhone } from "@/lib/format";
+import { getT } from "@/lib/i18n/server";
 
 export async function createCustomer(_prev: { error: string }, formData: FormData) {
   const { supabase } = await requireOps();
   const first = String(formData.get("first_name") ?? "").trim();
-  if (!first) return { error: "Ad gerekli." };
+  if (!first) return { error: (await getT())("Ad gerekli.") };
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   if (phone) {
     const { data: ex } = await supabase.from("customers").select("id").eq("phone", phone).maybeSingle();
@@ -27,7 +28,7 @@ export async function createCustomer(_prev: { error: string }, formData: FormDat
     })
     .select("id")
     .single();
-  if (error || !data) return { error: error?.message ?? "Kaydedilemedi" };
+  if (error || !data) return { error: error?.message ?? (await getT())("Kaydedilemedi") };
   revalidatePath("/panel/musteriler");
   redirect(`/panel/musteriler/${data.id}`);
 }

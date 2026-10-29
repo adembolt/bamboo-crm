@@ -2,11 +2,16 @@ import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { loadDay } from "@/lib/queries/calendar";
 import { todayIso, fmtDateLong, fmtTime, money, fullName } from "@/lib/format";
+import { getT, getLang } from "@/lib/i18n/server";
 
-export const metadata = { title: "Bugün" };
+export async function generateMetadata() {
+  const t = await getT();
+  return { title: t("Bugün") };
+}
 
 export default async function TodayPage() {
   const { supabase, profile } = await requireSession();
+  const [t, lang] = await Promise.all([getT(), getLang()]);
   const d = todayIso();
   const day = await loadDay(supabase, d);
   const active = day.items.filter((i) => i.status !== "cancelled");
@@ -22,18 +27,18 @@ export default async function TodayPage() {
   return (
     <div className="grid gap-4">
       <header>
-        <p className="eyebrow">Hoş geldin{profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}</p>
-        <h1 className="text-2xl font-bold capitalize">{fmtDateLong(d)}</h1>
+        <p className="eyebrow">{profile?.full_name ? t("Hoş geldin, {name}", { name: profile.full_name.split(" ")[0] }) : t("Hoş geldin")}</p>
+        <h1 className="text-2xl font-bold capitalize">{fmtDateLong(d, lang)}</h1>
       </header>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi label="Bugünkü ziyaret" value={String(visits.size)} sub={`${active.length} hizmet kalemi`} />
-        <Kpi label="Beklenen ciro" value={money(expected)} sub={`${money(done)} tamamlandı`} />
-        <Kpi label="Online talep" value={String(newReq ?? 0)} sub="onay bekliyor" href="/panel/online" warn={(newReq ?? 0) > 0} />
-        <Kpi label="Müşteri" value={String(customers ?? 0)} sub="kayıtlı" href="/panel/musteriler" />
+        <Kpi label={t("Bugünkü ziyaret")} value={String(visits.size)} sub={t("{n} hizmet kalemi", { n: active.length })} />
+        <Kpi label={t("Beklenen ciro")} value={money(expected)} sub={t("{amount} tamamlandı", { amount: money(done) })} />
+        <Kpi label={t("Online talep")} value={String(newReq ?? 0)} sub={t("onay bekliyor")} href="/panel/online" warn={(newReq ?? 0) > 0} />
+        <Kpi label={t("Müşteri")} value={String(customers ?? 0)} sub={t("kayıtlı")} href="/panel/musteriler" />
       </div>
       <section className="panel grid gap-3">
-        <div className="flex items-baseline justify-between"><h2 className="text-lg font-bold">Bugünün akışı</h2><Link className="text-sm text-green font-semibold" href="/panel/takvim">Takvimi aç →</Link></div>
-        {!active.length && <p className="text-muted text-sm">Bugün için randevu yok.</p>}
+        <div className="flex items-baseline justify-between"><h2 className="text-lg font-bold">{t("Bugünün akışı")}</h2><Link className="text-sm text-green font-semibold" href="/panel/takvim">{t("Takvimi aç →")}</Link></div>
+        {!active.length && <p className="text-muted text-sm">{t("Bugün için randevu yok.")}</p>}
         <div className="grid gap-2">
           {[...visits.values()]
             .sort((a, b) => a[0].starts_at.localeCompare(b[0].starts_at))
@@ -45,7 +50,7 @@ export default async function TodayPage() {
                 <div key={v.id} className="grid grid-cols-[auto_1fr_auto] gap-3 items-start rounded-xl bg-sunk px-3 py-2">
                   <div className="num font-bold">{fmtTime(sorted[0].starts_at)}</div>
                   <div className="min-w-0">
-                    <div className="font-semibold truncate">{c ? fullName(c) : "Müşterisiz"} {items.length > 1 && <span className="pill gold ml-1">{items.length} hizmet</span>}</div>
+                    <div className="font-semibold truncate">{c ? fullName(c) : t("Müşterisiz")} {items.length > 1 && <span className="pill gold ml-1">{t("{n} hizmet", { n: items.length })}</span>}</div>
                     <div className="text-xs text-muted truncate">{sorted.map((i) => `${fmtTime(i.starts_at)} ${i.service_name} (${day.staff.find((s) => s.id === i.staff_id)?.full_name.split(" ")[0] ?? "—"})`).join(" · ")}</div>
                   </div>
                   <div className="num font-bold">{money(tot)}</div>

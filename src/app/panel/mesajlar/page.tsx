@@ -4,8 +4,11 @@ import { todayIso, addDays, fmtDate, fmtTime, money, fullName } from "@/lib/form
 import { KINDS, VARS, pickLocale, fill, waLink, fmtForLocale, type MsgKind, type MsgLocale } from "@/lib/messages";
 import { MessageList, type MsgRow } from "./message-list";
 import { TemplateEditor } from "./template-editor";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata = { title: "Mesajlar" };
+export async function generateMetadata() {
+  return { title: (await getT())("Mesajlar") };
+}
 
 export default async function MessagesPage({ searchParams }: PageProps<"/panel/mesajlar">) {
   const sp = await searchParams;
@@ -14,12 +17,13 @@ export default async function MessagesPage({ searchParams }: PageProps<"/panel/m
   const d = typeof sp.d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.d) ? sp.d : kind === "reminder" ? addDays(today, 1) : today;
   const { supabase, profile } = await requireSession();
   const isManager = !!profile && ["owner", "manager"].includes(profile.role);
+  const t = await getT();
 
   const [{ data: tpls }, { data: settings }] = await Promise.all([
     supabase.from("message_templates").select("*"),
     supabase.from("settings").select("business_name, google_review_url").eq("id", 1).single(),
   ]);
-  const tpl = (k: string, l: MsgLocale) => tpls?.find((t) => t.kind === k && t.locale === l)?.body ?? tpls?.find((t) => t.kind === k && t.locale === "en")?.body ?? "";
+  const tpl = (k: string, l: MsgLocale) => tpls?.find((x) => x.kind === k && x.locale === l)?.body ?? tpls?.find((x) => x.kind === k && x.locale === "en")?.body ?? "";
   const salon = settings?.business_name || "Bamboo Beauty Lifes";
   const review = settings?.google_review_url || "";
 
@@ -53,7 +57,7 @@ export default async function MessagesPage({ searchParams }: PageProps<"/panel/m
     const since = addDays(today, -300);
     const { data: logs } = soon.length ? await supabase.from("message_log").select("customer_id, sent_at").eq("kind", "birthday").in("customer_id", soon.map((c) => c.id)).gte("sent_at", since) : { data: [] };
     rows = soon.map((c) => { const loc = pickLocale(c); const body = fill(tpl("birthday", loc), { ad: c.first_name, salon, yorum_link: review }); const dd = c.birth_date!.slice(5); const idx = days.indexOf(dd);
-      return { id: c.id, customerId: c.id, visitId: null, name: fullName(c), phone: c.phone, locale: loc, meta: idx === 0 ? "Bugün 🎂" : `${idx} gün sonra · ${fmtDate(addDays(today, idx))}`, body, href: waLink(c.phone, body), sentAt: logs?.find((l) => l.customer_id === c.id)?.sent_at ?? null, blocked: c.is_blocked }; });
+      return { id: c.id, customerId: c.id, visitId: null, name: fullName(c), phone: c.phone, locale: loc, meta: idx === 0 ? `${t("Bugün")} 🎂` : `${t("{n} gün sonra", { n: idx })} · ${fmtDate(addDays(today, idx))}`, body, href: waLink(c.phone, body), sentAt: logs?.find((l) => l.customer_id === c.id)?.sent_at ?? null, blocked: c.is_blocked }; });
   } else {
     // Geri kazanım: pazarlama izni olan, son tamamlanan ziyareti 60+ gün önce olan müşteriler
     const cutoff = addDays(today, -60);
@@ -65,7 +69,7 @@ export default async function MessagesPage({ searchParams }: PageProps<"/panel/m
     const since = addDays(today, -45);
     const { data: logs } = cs?.length ? await supabase.from("message_log").select("customer_id, sent_at").eq("kind", "winback").in("customer_id", cs.map((c) => c.id)).gte("sent_at", since) : { data: [] };
     rows = (cs ?? []).map((c) => { const loc = pickLocale(c); const lv = lastBy.get(c.id)!; const body = fill(tpl("winback", loc), { ad: c.first_name, salon, son_ziyaret: fmtDate(lv), yorum_link: review });
-      return { id: c.id, customerId: c.id, visitId: null, name: fullName(c), phone: c.phone, locale: loc, meta: `Son ziyaret ${fmtDate(lv)}`, body, href: waLink(c.phone, body), sentAt: logs?.find((l) => l.customer_id === c.id)?.sent_at ?? null, blocked: false }; })
+      return { id: c.id, customerId: c.id, visitId: null, name: fullName(c), phone: c.phone, locale: loc, meta: t("Son ziyaret {d}", { d: fmtDate(lv) }), body, href: waLink(c.phone, body), sentAt: logs?.find((l) => l.customer_id === c.id)?.sent_at ?? null, blocked: false }; })
       .sort((a, b) => (a.sentAt ? 1 : 0) - (b.sentAt ? 1 : 0));
   }
 
@@ -75,20 +79,20 @@ export default async function MessagesPage({ searchParams }: PageProps<"/panel/m
   return (
     <div className="grid gap-4">
       <header className="flex items-center gap-2 flex-wrap">
-        <h1 className="text-xl font-bold">Mesajlar</h1>
+        <h1 className="text-xl font-bold">{t("Mesajlar")}</h1>
         <nav className="flex gap-1 bg-sunk p-1 rounded-lg">
-          {KINDS.map((k) => <Link key={k.key} href={q(k.key)} className={`px-3 py-1 rounded-md text-sm font-semibold ${k.key === kind ? "bg-surface shadow-card" : "text-muted"}`}>{k.label}</Link>)}
+          {KINDS.map((k) => <Link key={k.key} href={q(k.key)} className={`px-3 py-1 rounded-md text-sm font-semibold ${k.key === kind ? "bg-surface shadow-card" : "text-muted"}`}>{t(k.label)}</Link>)}
         </nav>
         {(kind === "reminder" || kind === "thanks") && (
           <span className="flex items-center gap-1"><Link className="btn ghost sm" href={q(kind, addDays(d, -1))}>‹</Link><b className="min-w-[110px] text-center">{fmtDate(d)}</b><Link className="btn ghost sm" href={q(kind, addDays(d, 1))}>›</Link></span>
         )}
-        {isManager && <Link className="btn ghost sm ml-auto" href="#sablonlar">Şablonları düzenle</Link>}
+        {isManager && <Link className="btn ghost sm ml-auto" href="#sablonlar">{t("Şablonları düzenle")}</Link>}
       </header>
-      <p className="text-sm text-muted -mt-2">{info.hint}. WhatsApp&apos;ta aç → mesaj hazır gelir, siz göndermeye basarsınız; ardından “Gönderildi” işaretleyin.</p>
+      <p className="text-sm text-muted -mt-2">{t("{hint}. WhatsApp'ta aç → mesaj hazır gelir, siz göndermeye basarsınız; ardından “Gönderildi” işaretleyin.", { hint: t(info.hint) })}</p>
 
       <MessageList rows={rows} kind={kind} />
 
-      {isManager && <TemplateEditor templates={(tpls ?? []).map((t) => ({ kind: t.kind, locale: t.locale as MsgLocale, body: t.body }))} vars={VARS} />}
+      {isManager && <TemplateEditor templates={(tpls ?? []).map((x) => ({ kind: x.kind, locale: x.locale as MsgLocale, body: x.body }))} vars={VARS} />}
     </div>
   );
 }

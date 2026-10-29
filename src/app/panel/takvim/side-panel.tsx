@@ -1,11 +1,15 @@
 import Link from "next/link";
-import { money, todayIso } from "@/lib/format";
+import { money, todayIso, addDays, fmtMonthYear, fmtWeekdayShort } from "@/lib/format";
+import { getT, getLang } from "@/lib/i18n/server";
 import { Donut } from "@/components/charts";
 import { SERIES } from "@/lib/charts";
 
-const WD = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
+/* Pazartesi 2024-01-01’den başlayan 7 gün → dile göre kısa gün adları */
+const WEEK = Array.from({ length: 7 }, (_, i) => addDays("2024-01-01", i));
 
-export function MiniCalendar({ date, busyDays }: { date: string; busyDays: Set<string> }) {
+export async function MiniCalendar({ date, busyDays }: { date: string; busyDays: Set<string> }) {
+  const [t, lang] = await Promise.all([getT(), getLang()]);
+  const WD = WEEK.map((w) => fmtWeekdayShort(w, lang));
   const [y, m] = date.split("-").map(Number);
   const first = new Date(Date.UTC(y, m - 1, 1));
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -18,9 +22,9 @@ export function MiniCalendar({ date, busyDays }: { date: string; busyDays: Set<s
   return (
     <section className="panel grid gap-2">
       <div className="flex items-center justify-between">
-        <Link className="btn ghost sm" href={`/panel/takvim?d=${prev}`} aria-label="Önceki ay">‹</Link>
-        <b className="capitalize">{new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" }).format(new Date(date + "T12:00:00"))}</b>
-        <Link className="btn ghost sm" href={`/panel/takvim?d=${next}`} aria-label="Sonraki ay">›</Link>
+        <Link className="btn ghost sm" href={`/panel/takvim?d=${prev}`} aria-label={t("Önceki ay")}>‹</Link>
+        <b className="capitalize">{fmtMonthYear(date, lang)}</b>
+        <Link className="btn ghost sm" href={`/panel/takvim?d=${next}`} aria-label={t("Sonraki ay")}>›</Link>
       </div>
       <div className="grid grid-cols-7 text-center text-[11px] text-muted font-semibold">{WD.map((w, i) => <span key={w} className={i >= 5 ? "text-bad" : ""}>{w}</span>)}</div>
       <div className="grid grid-cols-7 gap-y-1 text-center text-sm">
@@ -35,16 +39,17 @@ export function MiniCalendar({ date, busyDays }: { date: string; busyDays: Set<s
   );
 }
 
-export function KasaSnapshot({ date, gross, byMethod, expected, openCount, closedCount }: { date: string; gross: number; byMethod: Record<string, number>; expected: number; openCount: number; closedCount: number }) {
+export async function KasaSnapshot({ date, gross, byMethod, expected, openCount, closedCount }: { date: string; gross: number; byMethod: Record<string, number>; expected: number; openCount: number; closedCount: number }) {
+  const t = await getT();
   const cash = byMethod.cash ?? 0, card = byMethod.card ?? 0, transfer = byMethod.transfer ?? 0, other = Math.max(0, gross - cash - card - transfer);
-  const slices = [{ label: "Nakit", value: cash, color: SERIES[2] }, { label: "Kart", value: card, color: SERIES[0] }, { label: "Havale", value: transfer, color: SERIES[3] }, { label: "Diğer", value: other, color: SERIES[6] }].filter((s) => s.value > 0);
+  const slices = [{ label: t("Nakit"), value: cash, color: SERIES[2] }, { label: t("Kart"), value: card, color: SERIES[0] }, { label: t("Havale"), value: transfer, color: SERIES[3] }, { label: t("Diğer"), value: other, color: SERIES[6] }].filter((s) => s.value > 0);
   return (
     <section className="panel grid gap-2">
-      <div className="flex items-center justify-between"><h2 className="font-bold">Kasa · {date === todayIso() ? "bugün" : date.split("-").reverse().join(".")}</h2><Link className="text-xs text-green font-semibold hover:underline" href={`/panel/kasa?d=${date}`}>Kasaya git →</Link></div>
-      {gross > 0 ? <Donut title="" slices={slices} total={gross} bare /> : <div className="text-sm text-muted">Henüz tahsilat yok.</div>}
+      <div className="flex items-center justify-between"><h2 className="font-bold">{t("Kasa · {day}", { day: date === todayIso() ? t("bugün") : date.split("-").reverse().join(".") })}</h2><Link className="text-xs text-green font-semibold hover:underline" href={`/panel/kasa?d=${date}`}>{t("Kasaya git →")}</Link></div>
+      {gross > 0 ? <Donut title="" slices={slices} total={gross} bare /> : <div className="text-sm text-muted">{t("Henüz tahsilat yok.")}</div>}
       <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="rounded-lg bg-sunk px-2 py-1"><span className="block text-[11px] text-muted">Tahsil edilen</span><b className="num">{money(gross)}</b><span className="block text-[11px] text-muted">{closedCount} kapatılan</span></div>
-        <div className={`rounded-lg px-2 py-1 ${expected > 0 ? "bg-warn-bg" : "bg-sunk"}`}><span className="block text-[11px] text-muted">Bekleyen</span><b className="num">{money(expected)}</b><span className="block text-[11px] text-muted">{openCount} açık ziyaret</span></div>
+        <div className="rounded-lg bg-sunk px-2 py-1"><span className="block text-[11px] text-muted">{t("Tahsil edilen")}</span><b className="num">{money(gross)}</b><span className="block text-[11px] text-muted">{t("{n} kapatılan", { n: closedCount })}</span></div>
+        <div className={`rounded-lg px-2 py-1 ${expected > 0 ? "bg-warn-bg" : "bg-sunk"}`}><span className="block text-[11px] text-muted">{t("Bekleyen")}</span><b className="num">{money(expected)}</b><span className="block text-[11px] text-muted">{t("{n} açık ziyaret", { n: openCount })}</span></div>
       </div>
     </section>
   );

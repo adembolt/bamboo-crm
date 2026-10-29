@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useT } from "@/lib/i18n/client";
 
 const items = [
   { href: "/panel", label: "Bugün", icon: "◎" },
@@ -17,8 +18,9 @@ const items = [
 
 export function Nav() {
   const path = usePathname();
+  const t = useT();
   return (
-    <nav className="flex md:flex-col gap-1 overflow-x-auto flex-1 md:flex-none" aria-label="Ana menü">
+    <nav className="flex md:flex-col gap-1 overflow-x-auto flex-1 md:flex-none" aria-label={t("Ana menü")}>
       {items.map((it) => {
         const active = it.href === "/panel" ? path === "/panel" : path.startsWith(it.href);
         return (
@@ -29,7 +31,7 @@ export function Nav() {
             className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap ${active ? "bg-green-soft text-green" : "text-muted hover:bg-sunk hover:text-ink"}`}
           >
             <span aria-hidden className="w-4 text-center">{it.icon}</span>
-            <span className="hidden sm:inline">{it.label}</span>
+            <span className="hidden sm:inline">{t(it.label)}</span>
           </Link>
         );
       })}

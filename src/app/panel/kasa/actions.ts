@@ -4,6 +4,7 @@ import { requireOps, requireManager } from "@/lib/auth";
 import type { PayMethod } from "@/lib/database.types";
 import { loadKasaDay, type DayVisit } from "@/lib/queries/kasa";
 import { addProductLines, restockSale, type ProductLine } from "@/app/panel/urunler/actions";
+import { getT } from "@/lib/i18n/server";
 
 export type CloseVisitInput = {
   visitId: string;
@@ -18,10 +19,11 @@ export type CloseVisitInput = {
 /** Ziyareti kapatır: satış + kalemler + ödemeler oluşturur, ziyareti 'completed' yapar. */
 export async function closeVisit(input: CloseVisitInput) {
   const { supabase, user } = await requireOps();
+  const t = await getT();
   const { data: visit } = await supabase.from("visits").select("id, customer_id, visit_date, status").eq("id", input.visitId).single();
-  if (!visit) return { ok: false as const, error: "Ziyaret bulunamadı." };
+  if (!visit) return { ok: false as const, error: t("Ziyaret bulunamadı.") };
   const { data: existing } = await supabase.from("sales").select("id").eq("visit_id", visit.id).maybeSingle();
-  if (existing) return { ok: false as const, error: "Bu ziyaret zaten kapatılmış." };
+  if (existing) return { ok: false as const, error: t("Bu ziyaret zaten kapatılmış.") };
 
   const { data: items } = await supabase.from("visit_items").select("id, service_name, staff_id, price, discount, status").eq("visit_id", visit.id).neq("status", "cancelled");
   const pkgUse = input.packageUse ?? {};
@@ -30,8 +32,8 @@ export async function closeVisit(input: CloseVisitInput) {
   const { data: pkgs } = pkgIds.length ? await supabase.from("customer_packages").select("id, total_sessions, used_sessions, is_active, customer_id").in("id", pkgIds) : { data: [] };
   for (const pid of pkgIds) {
     const p = pkgs?.find((x) => x.id === pid); const need = Object.values(pkgUse).filter((x) => x === pid).length;
-    if (!p || !p.is_active || p.customer_id !== visit.customer_id) return { ok: false as const, error: "Paket bulunamadı." };
-    if (p.total_sessions - p.used_sessions < need) return { ok: false as const, error: "Pakette yeterli seans yok." };
+    if (!p || !p.is_active || p.customer_id !== visit.customer_id) return { ok: false as const, error: t("Paket bulunamadı.") };
+    if (p.total_sessions - p.used_sessions < need) return { ok: false as const, error: t("Pakette yeterli seans yok.") };
   }
   const lines = (items ?? []).map((i) => {
     const fromPkg = !!pkgUse[i.id];
@@ -44,9 +46,9 @@ export async function closeVisit(input: CloseVisitInput) {
   const { data: cards } = gcPays.length ? await supabase.from("gift_cards").select("id, code, balance, expires_at").in("code", gcPays.map((p) => String(p.ref ?? "").trim().toUpperCase())) : { data: [] };
   for (const p of gcPays) {
     const c = cards?.find((x) => x.code === String(p.ref ?? "").trim().toUpperCase());
-    if (!c) return { ok: false as const, error: `Hediye çeki bulunamadı: ${p.ref ?? ""}` };
-    if (c.expires_at && c.expires_at < visit.visit_date) return { ok: false as const, error: `Hediye çeki süresi dolmuş: ${c.code}` };
-    if (Number(c.balance) < Number(p.amount)) return { ok: false as const, error: `Çek bakiyesi yetersiz (${c.code}: ${c.balance}).` };
+    if (!c) return { ok: false as const, error: t("Hediye çeki bulunamadı: {code}", { code: p.ref ?? "" }) };
+    if (c.expires_at && c.expires_at < visit.visit_date) return { ok: false as const, error: t("Hediye çeki süresi dolmuş: {code}", { code: c.code }) };
+    if (Number(c.balance) < Number(p.amount)) return { ok: false as const, error: t("Çek bakiyesi yetersiz ({code}: {balance}).", { code: c.code, balance: c.balance }) };
   }
   const { data: settings } = await supabase.from("settings").select("loyalty_earn_percent, loyalty_point_value").eq("id", 1).single();
   const pointPays = input.payments.filter((p) => p.method === "points" && Number(p.amount) > 0).reduce((s, p) => s + Number(p.amount), 0);
@@ -55,10 +57,10 @@ export async function closeVisit(input: CloseVisitInput) {
   const balancePay = input.payments.filter((p) => p.method === "balance" && Number(p.amount) > 0).reduce((s, p) => s + Number(p.amount), 0);
   let customerBalance = 0;
   if (visit.customer_id) { const { data: cb } = await supabase.from("customers").select("balance").eq("id", visit.customer_id).single(); customerBalance = Number(cb?.balance ?? 0); }
-  if (balancePay > 0 && (!visit.customer_id || customerBalance + 0.001 < balancePay)) return { ok: false as const, error: `Bakiye yetersiz (mevcut ${customerBalance}).` };
+  if (balancePay > 0 && (!visit.customer_id || customerBalance + 0.001 < balancePay)) return { ok: false as const, error: t("Bakiye yetersiz (mevcut {n}).", { n: customerBalance }) };
   const pointValue = Number(settings?.loyalty_point_value ?? 1) || 1;
   const pointsNeeded = Math.ceil(pointPays / pointValue);
-  if (pointPays > 0 && (!visit.customer_id || customerPoints < pointsNeeded)) return { ok: false as const, error: `Yeterli puan yok (mevcut ${customerPoints}, gereken ${pointsNeeded}).` };
+  if (pointPays > 0 && (!visit.customer_id || customerPoints < pointsNeeded)) return { ok: false as const, error: t("Yeterli puan yok (mevcut {have}, gereken {need}).", { have: customerPoints, need: pointsNeeded }) };
   const svcSubtotal = lines.reduce((s, l) => s + l.total, 0);
   const prodLines = (input.products ?? []).filter((l) => l.productId && l.qty > 0);
   const prodTotal = Math.round(prodLines.reduce((s, l) => s + l.qty * l.unitPrice, 0) * 100) / 100;
@@ -66,14 +68,14 @@ export async function closeVisit(input: CloseVisitInput) {
   const subtotal = svcSubtotal + prodTotal;
   const total = Math.round((subtotal - discount) * 100) / 100;
   const paid = input.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  if (Math.abs(paid - total) > 0.5) return { ok: false as const, error: `Ödeme toplamı (${paid}) tutarla (${total}) eşleşmiyor.` };
+  if (Math.abs(paid - total) > 0.5) return { ok: false as const, error: t("Ödeme toplamı ({paid}) tutarla ({total}) eşleşmiyor.", { paid, total }) };
 
   const { data: sale, error } = await supabase
     .from("sales")
     .insert({ visit_id: visit.id, customer_id: visit.customer_id, sale_date: visit.visit_date, subtotal, discount, total, notes: input.notes ?? "", created_by: user.id })
     .select("id")
     .single();
-  if (error || !sale) return { ok: false as const, error: error?.message ?? "Satış oluşturulamadı" };
+  if (error || !sale) return { ok: false as const, error: error?.message ?? t("Satış oluşturulamadı") };
 
   // İndirimi kalemlere oransal dağıt (hak ediş net tutar üzerinden)
   const factor = svcSubtotal > 0 ? (svcSubtotal - discount) / svcSubtotal : 1;
@@ -151,7 +153,7 @@ export async function voidSale(saleId: string) {
 export async function addExpense(_prev: { error: string }, formData: FormData) {
   const { supabase, user } = await requireOps();
   const amount = Number(String(formData.get("amount") ?? "").replace(",", "."));
-  if (!amount || amount <= 0) return { error: "Tutar gerekli." };
+  if (!amount || amount <= 0) return { error: (await getT())("Tutar gerekli.") };
   const { error } = await supabase.from("expenses").insert({
     expense_date: String(formData.get("date")),
     category: String(formData.get("category") ?? "genel"),
@@ -175,7 +177,7 @@ export async function deleteExpense(id: string) {
 export async function addPayout(_prev: { error: string }, formData: FormData) {
   const { supabase, user } = await requireManager();
   const amount = Number(String(formData.get("amount") ?? "").replace(",", "."));
-  if (!amount) return { error: "Tutar gerekli." };
+  if (!amount) return { error: (await getT())("Tutar gerekli.") };
   const { error } = await supabase.from("staff_payouts").insert({
     staff_id: String(formData.get("staff_id")),
     period_start: String(formData.get("period_start")),
@@ -194,11 +196,12 @@ export async function addPayout(_prev: { error: string }, formData: FormData) {
 /** Seans paketi satışı: kasa satışı + müşteri paketi */
 export async function sellPackage(input: { customerId: string; serviceId: string | null; name: string; sessions: number; price: number; expiresAt: string | null; staffId: string | null; saleDate: string; payments: { method: PayMethod; amount: number; ref?: string }[]; notes?: string }) {
   const { supabase, user } = await requireOps();
-  if (!input.name.trim() || input.sessions < 1) return { ok: false as const, error: "Paket adı ve seans sayısı gerekli." };
+  const t = await getT();
+  if (!input.name.trim() || input.sessions < 1) return { ok: false as const, error: t("Paket adı ve seans sayısı gerekli.") };
   const paid = input.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  if (Math.abs(paid - input.price) > 0.5) return { ok: false as const, error: `Ödeme toplamı (${paid}) tutarla (${input.price}) eşleşmiyor.` };
+  if (Math.abs(paid - input.price) > 0.5) return { ok: false as const, error: t("Ödeme toplamı ({paid}) tutarla ({total}) eşleşmiyor.", { paid, total: input.price }) };
   const { data: sale, error } = await supabase.from("sales").insert({ customer_id: input.customerId, sale_date: input.saleDate, subtotal: input.price, discount: 0, total: input.price, notes: input.notes ?? "Paket satışı", created_by: user.id }).select("id").single();
-  if (error || !sale) return { ok: false as const, error: error?.message ?? "Satış oluşturulamadı" };
+  if (error || !sale) return { ok: false as const, error: error?.message ?? t("Satış oluşturulamadı") };
   await supabase.from("sale_items").insert({ sale_id: sale.id, kind: "package", name: `${input.name} (${input.sessions} seans)`, staff_id: input.staffId, qty: 1, unit_price: input.price, discount: 0, total: input.price });
   const pays = input.payments.filter((p) => Number(p.amount) > 0).map((p) => ({ sale_id: sale.id, method: p.method, amount: Number(p.amount), ref: String(p.ref ?? "").toUpperCase() }));
   if (pays.length) await supabase.from("sale_payments").insert(pays);
@@ -219,11 +222,12 @@ export async function adjustPackage(id: string, patch: { used_sessions?: number;
 /** Hediye çeki satışı */
 export async function sellGiftCard(input: { amount: number; buyerName: string; customerId: string | null; expiresAt: string | null; saleDate: string; payments: { method: PayMethod; amount: number }[]; notes?: string }) {
   const { supabase, user } = await requireOps();
-  if (!(input.amount > 0)) return { ok: false as const, error: "Tutar gerekli." };
+  const t = await getT();
+  if (!(input.amount > 0)) return { ok: false as const, error: t("Tutar gerekli.") };
   const paid = input.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  if (Math.abs(paid - input.amount) > 0.5) return { ok: false as const, error: `Ödeme toplamı (${paid}) tutarla (${input.amount}) eşleşmiyor.` };
+  if (Math.abs(paid - input.amount) > 0.5) return { ok: false as const, error: t("Ödeme toplamı ({paid}) tutarla ({total}) eşleşmiyor.", { paid, total: input.amount }) };
   const { data: sale, error } = await supabase.from("sales").insert({ customer_id: input.customerId, sale_date: input.saleDate, subtotal: input.amount, discount: 0, total: input.amount, notes: "Hediye çeki satışı", created_by: user.id }).select("id").single();
-  if (error || !sale) return { ok: false as const, error: error?.message ?? "Satış oluşturulamadı" };
+  if (error || !sale) return { ok: false as const, error: error?.message ?? t("Satış oluşturulamadı") };
   await supabase.from("sale_items").insert({ sale_id: sale.id, kind: "gift_card", name: "Hediye çeki", staff_id: null, qty: 1, unit_price: input.amount, discount: 0, total: input.amount });
   const pays = input.payments.filter((p) => Number(p.amount) > 0).map((p) => ({ sale_id: sale.id, method: p.method, amount: Number(p.amount) }));
   if (pays.length) await supabase.from("sale_payments").insert(pays);
@@ -249,12 +253,13 @@ export async function adjustPoints(customerId: string, points: number, reason: s
 /** Bakiye (balans) yükleme: kasa satışı + müşteri bakiyesi */
 export async function topUpBalance(input: { customerId: string; amount: number; saleDate: string; payments: { method: PayMethod; amount: number; ref?: string }[]; notes?: string }) {
   const { supabase, user } = await requireOps();
-  if (!(input.amount > 0)) return { ok: false as const, error: "Tutar gerekli." };
+  const t = await getT();
+  if (!(input.amount > 0)) return { ok: false as const, error: t("Tutar gerekli.") };
   const paid = input.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  if (Math.abs(paid - input.amount) > 0.5) return { ok: false as const, error: `Ödeme toplamı (${paid}) tutarla (${input.amount}) eşleşmiyor.` };
-  if (input.payments.some((p) => ["balance", "points", "package"].includes(p.method))) return { ok: false as const, error: "Bakiye yüklemesi nakit/kart/havale ile yapılır." };
+  if (Math.abs(paid - input.amount) > 0.5) return { ok: false as const, error: t("Ödeme toplamı ({paid}) tutarla ({total}) eşleşmiyor.", { paid, total: input.amount }) };
+  if (input.payments.some((p) => ["balance", "points", "package"].includes(p.method))) return { ok: false as const, error: t("Bakiye yüklemesi nakit/kart/havale ile yapılır.") };
   const { data: sale, error } = await supabase.from("sales").insert({ customer_id: input.customerId, sale_date: input.saleDate, subtotal: input.amount, discount: 0, total: input.amount, notes: input.notes ?? "Bakiye yükleme", created_by: user.id }).select("id").single();
-  if (error || !sale) return { ok: false as const, error: error?.message ?? "Satış oluşturulamadı" };
+  if (error || !sale) return { ok: false as const, error: error?.message ?? t("Satış oluşturulamadı") };
   await supabase.from("sale_items").insert({ sale_id: sale.id, kind: "balance", name: "Bakiye yükleme", staff_id: null, qty: 1, unit_price: input.amount, discount: 0, total: input.amount });
   await supabase.from("sale_payments").insert(input.payments.filter((p) => Number(p.amount) > 0).map((p) => ({ sale_id: sale.id, method: p.method, amount: Number(p.amount), ref: String(p.ref ?? "").toUpperCase() })));
   const { data: cb } = await supabase.from("customers").select("balance").eq("id", input.customerId).single();
@@ -276,11 +281,12 @@ export async function adjustBalance(customerId: string, amount: number, reason: 
 /** Takvimden ödeme almak için tek ziyareti (paketler, bakiye, puan ile) getirir */
 export async function loadVisitForClose(visitId: string): Promise<{ ok: true; visit: DayVisit } | { ok: false; error: string }> {
   const { supabase } = await requireOps();
+  const t = await getT();
   const { data: v } = await supabase.from("visits").select("visit_date").eq("id", visitId).single();
-  if (!v) return { ok: false, error: "Ziyaret bulunamadı." };
+  if (!v) return { ok: false, error: t("Ziyaret bulunamadı.") };
   const day = await loadKasaDay(supabase, v.visit_date);
   const visit = day.visits.find((x) => x.id === visitId);
-  if (!visit) return { ok: false, error: "Ziyaret bulunamadı." };
-  if (visit.sale) return { ok: false, error: "Bu ziyaretin ödemesi zaten alınmış." };
+  if (!visit) return { ok: false, error: t("Ziyaret bulunamadı.") };
+  if (visit.sale) return { ok: false, error: t("Bu ziyaretin ödemesi zaten alınmış.") };
   return { ok: true, visit };
 }

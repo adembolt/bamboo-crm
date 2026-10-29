@@ -2,19 +2,21 @@
 import { useState } from "react";
 import { saveTemplates } from "./actions";
 import { KINDS, type MsgLocale } from "@/lib/messages";
+import { useT } from "@/lib/i18n/client";
 
 const LOCALES: { key: MsgLocale; label: string }[] = [{ key: "tr", label: "Türkçe" }, { key: "en", label: "English" }, { key: "ru", label: "Русский" }];
 
 export function TemplateEditor({ templates, vars }: { templates: { kind: string; locale: MsgLocale; body: string }[]; vars: string[] }) {
+  const t = useT();
   const [kind, setKind] = useState(KINDS[0].key as string);
-  const get = (k: string, l: MsgLocale) => templates.find((t) => t.kind === k && t.locale === l)?.body ?? "";
+  const get = (k: string, l: MsgLocale) => templates.find((x) => x.kind === k && x.locale === l)?.body ?? "";
   return (
     <section id="sablonlar" className="panel grid gap-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <h2 className="font-bold">Mesaj şablonları</h2>
-        <div className="flex gap-1 bg-sunk p-1 rounded-lg">{KINDS.map((k) => <button key={k.key} type="button" onClick={() => setKind(k.key)} className={`px-3 py-1 rounded-md text-sm font-semibold ${kind === k.key ? "bg-surface shadow-card" : "text-muted"}`}>{k.label}</button>)}</div>
+        <h2 className="font-bold">{t("Mesaj şablonları")}</h2>
+        <div className="flex gap-1 bg-sunk p-1 rounded-lg">{KINDS.map((k) => <button key={k.key} type="button" onClick={() => setKind(k.key)} className={`px-3 py-1 rounded-md text-sm font-semibold ${kind === k.key ? "bg-surface shadow-card" : "text-muted"}`}>{t(k.label)}</button>)}</div>
       </div>
-      <p className="text-xs text-muted">Değişkenler: {vars.map((v) => <code key={v} className="mr-2">{v}</code>)}. Müşterinin dili yoksa telefon koduna göre seçilir (+90 TR, +7 RU, diğer EN).</p>
+      <p className="text-xs text-muted">{t("Değişkenler:")} {vars.map((v) => <code key={v} className="mr-2">{v}</code>)}. {t("Müşterinin dili yoksa telefon koduna göre seçilir (+90 TR, +7 RU, diğer EN).")}</p>
       <form action={saveTemplates} className="grid gap-3">
         {KINDS.map((k) => LOCALES.map((l) => (
           <div key={`${k.key}:${l.key}`} style={{ display: k.key === kind ? undefined : "none" }}>
@@ -23,7 +25,7 @@ export function TemplateEditor({ templates, vars }: { templates: { kind: string;
             </label>
           </div>
         )))}
-        <div><button className="btn">Şablonları kaydet</button></div>
+        <div><button className="btn">{t("Şablonları kaydet")}</button></div>
       </form>
     </section>
   );

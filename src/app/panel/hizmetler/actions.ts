@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/auth";
+import { getT } from "@/lib/i18n/server";
 
 export async function setServiceOnline(id: string, online: boolean) {
   const { supabase } = await requireManager();
@@ -54,7 +55,7 @@ export async function saveService(_prev: { error: string; saved?: boolean }, for
     requires_consultation: formData.get("requires_consultation") === "on",
     is_active: formData.get("is_active") !== "off",
   };
-  if (!payload.name_tr) return { error: "Türkçe ad gerekli." };
+  if (!payload.name_tr) return { error: (await getT())("Türkçe ad gerekli.") };
   const res = id
     ? await supabase.from("services").update(payload).eq("id", id)
     : await supabase.from("services").insert(payload);

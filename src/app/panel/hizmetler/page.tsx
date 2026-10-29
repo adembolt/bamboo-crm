@@ -1,8 +1,11 @@
 import { requireSession } from "@/lib/auth";
 import { ServicesTable } from "./services-table";
 import type { Service, ServiceCategory } from "@/lib/database.types";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata = { title: "Hizmetler" };
+export async function generateMetadata() {
+  return { title: (await getT())("Hizmetler") };
+}
 
 export default async function ServicesPage({ searchParams }: PageProps<"/panel/hizmetler">) {
   const sp = await searchParams;

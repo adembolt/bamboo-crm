@@ -3,18 +3,21 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { setStaffPhoto } from "@/app/panel/personel/actions";
+import { useT } from "@/lib/i18n/client";
+import type { TFn } from "@/lib/i18n/core";
 
 /** Görseli kare kırpıp 320px JPEG'e küçültür (hızlı yükleme, az yer) */
-async function squareJpeg(file: File, size = 320): Promise<Blob> {
+async function squareJpeg(file: File, t: TFn, size = 320): Promise<Blob> {
   const img = await createImageBitmap(file);
   const s = Math.min(img.width, img.height);
   const c = document.createElement("canvas"); c.width = size; c.height = size;
   c.getContext("2d")!.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
-  return await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Görsel işlenemedi"))), "image/jpeg", 0.85));
+  return await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error(t("Görsel işlenemedi")))), "image/jpeg", 0.85));
 }
 
 export function StaffAvatar({ staff, size = 36, editable = false }: { staff: { id: string; full_name: string; color: string; photo_url: string | null }; size?: number; editable?: boolean }) {
   const router = useRouter();
+  const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -22,8 +25,8 @@ export function StaffAvatar({ staff, size = 36, editable = false }: { staff: { i
   async function onFile(f: File) {
     setErr(""); setBusy(true);
     try {
-      if (!/^image\//.test(f.type)) throw new Error("Lütfen bir fotoğraf seçin.");
-      const blob = await squareJpeg(f);
+      if (!/^image\//.test(f.type)) throw new Error(t("Lütfen bir fotoğraf seçin."));
+      const blob = await squareJpeg(f, t);
       const sb = createClient();
       const path = `${staff.id}/${Date.now()}.jpg`;
       const { error } = await sb.storage.from("staff-photos").upload(path, blob, { contentType: "image/jpeg", upsert: true });
@@ -32,7 +35,7 @@ export function StaffAvatar({ staff, size = 36, editable = false }: { staff: { i
       const r = await setStaffPhoto(staff.id, url);
       if (!r.ok) throw new Error(r.error);
       router.refresh();
-    } catch (e) { setErr(e instanceof Error ? e.message : "Yüklenemedi"); }
+    } catch (e) { setErr(e instanceof Error ? e.message : t("Yüklenemedi")); }
     finally { setBusy(false); }
   }
   const face = staff.photo_url
@@ -42,7 +45,7 @@ export function StaffAvatar({ staff, size = 36, editable = false }: { staff: { i
   if (!editable) return <span className="relative flex-none rounded-full" style={{ width: size, height: size, boxShadow: `0 0 0 2px ${staff.color}` }}>{face}</span>;
   return (
     <span className="relative flex-none" style={{ width: size, height: size }}>
-      <button type="button" title={err || (staff.photo_url ? "Fotoğrafı değiştir" : "Fotoğraf yükle")} aria-label={`${staff.full_name} fotoğrafı`} disabled={busy}
+      <button type="button" title={err || (staff.photo_url ? t("Fotoğrafı değiştir") : t("Fotoğraf yükle"))} aria-label={t("{name} fotoğrafı", { name: staff.full_name })} disabled={busy}
         onClick={(e) => { e.stopPropagation(); input.current?.click(); }}
         className="group relative block w-full h-full rounded-full" style={{ boxShadow: `0 0 0 2px ${err ? "var(--bad)" : staff.color}` }}>
         {face}

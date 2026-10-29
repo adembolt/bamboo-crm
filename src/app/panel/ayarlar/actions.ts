@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/auth";
+import { getT } from "@/lib/i18n/server";
 
 export async function saveSettings(formData: FormData) {
   const { supabase } = await requireManager();
@@ -35,7 +36,7 @@ export async function savePromo(formData: FormData) {
   const { supabase } = await requireManager();
   const code = String(formData.get("code") ?? "").trim().toUpperCase().replace(/\s+/g, "");
   const percent = Number(String(formData.get("percent") ?? "").replace(",", "."));
-  if (!code || !(percent > 0 && percent <= 100)) redirect("/panel/ayarlar?error=" + encodeURIComponent("Kod ve 1–100 arası indirim yüzdesi gerekli") + "#promo");
+  if (!code || !(percent > 0 && percent <= 100)) redirect("/panel/ayarlar?error=" + encodeURIComponent((await getT())("Kod ve 1–100 arası indirim yüzdesi gerekli")) + "#promo");
   const { error } = await supabase.from("promo_codes").upsert({ code, percent, description: String(formData.get("description") ?? ""), valid_until: String(formData.get("valid_until") ?? "") || null, is_active: true });
   if (error) redirect("/panel/ayarlar?error=" + encodeURIComponent(error.message) + "#promo");
   revalidatePath("/panel/ayarlar");

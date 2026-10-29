@@ -7,9 +7,11 @@ import { closeVisit } from "./actions";
 import { listProductsForSale } from "@/app/panel/urunler/actions";
 import { Modal } from "@/components/modal";
 import { TopUpDialog } from "@/components/topup-dialog";
+import { useT } from "@/lib/i18n/client";
 
 export const METHOD: Record<PayMethod, string> = { cash: "Nakit", card: "Kart", transfer: "Havale", online: "Online", balance: "Bakiye", gift_card: "Hediye çeki", points: "Puan", package: "Paket", other: "Diğer" };
 export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; staffName: (id: string | null) => string; onClose: () => void; onDone: () => void }) {
+  const t = useT();
   const [pending, start] = useTransition();
   const [err, setErr] = useState("");
   const items = v.items.filter((i) => i.status !== "cancelled");
@@ -61,7 +63,7 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
   }
 
   return (
-    <Modal title={`Ödeme al · ${v.customer ? fullName(v.customer) : "Müşterisiz"}`} onClose={onClose}>
+    <Modal title={`${t("Ödeme al")} · ${v.customer ? fullName(v.customer) : t("Müşterisiz")}`} onClose={onClose}>
       <div className="grid gap-4">
         <div className="grid gap-2">
           {items.map((i) => (
@@ -70,11 +72,11 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
                 {pkgFor(i).length > 0 && (
                   <label className="flex items-center gap-1 text-xs mt-1">
                     <input type="checkbox" checked={!!pkgUse[i.id]} onChange={(e) => { const pid = pkgFor(i).find((p) => pkgRemaining(p.id) > 0 || pkgUse[i.id] === p.id)?.id; const n = { ...pkgUse }; if (e.target.checked && pid) n[i.id] = pid; else delete n[i.id]; setPkgUse(n); }} />
-                    Paketten düş {pkgUse[i.id] ? <span className="text-muted">({pkgs.find((p) => p.id === pkgUse[i.id])?.name} · kalan {pkgRemaining(pkgUse[i.id])})</span> : <span className="text-muted">({pkgFor(i).map((p) => `${p.name} ${p.total_sessions - p.used_sessions}`).join(", ")})</span>}
+                    {t("Paketten düş")} {pkgUse[i.id] ? <span className="text-muted">({pkgs.find((p) => p.id === pkgUse[i.id])?.name} · {t("kalan {n}", { n: pkgRemaining(pkgUse[i.id]) })})</span> : <span className="text-muted">({pkgFor(i).map((p) => `${p.name} ${p.total_sessions - p.used_sessions}`).join(", ")})</span>}
                   </label>
                 )}
               </span>
-              {pkgUse[i.id] ? <span className="text-right text-sm text-good font-semibold">paket</span> : <span className="inp"><input inputMode="decimal" value={prices[i.id]} onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} className="text-right" /></span>}
+              {pkgUse[i.id] ? <span className="text-right text-sm text-good font-semibold">{t("paket")}</span> : <span className="inp"><input inputMode="decimal" value={prices[i.id]} onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} className="text-right" /></span>}
             </div>
           ))}
         </div>
@@ -82,53 +84,53 @@ export function CloseDialog({ v, staffName, onClose, onDone }: { v: DayVisit; st
           {prodLines.map((l, k) => { const p = catalog?.find((x) => x.id === l.productId); return (
             <div key={k} className="grid grid-cols-[1fr_60px_90px_auto] gap-2 items-center">
               <span className="inp"><select value={l.productId} onChange={(e) => { const np = catalog?.find((x) => x.id === e.target.value); setProdLines(prodLines.map((x, j) => j === k ? { ...x, productId: e.target.value, price: np ? String(np.sale_price) : x.price } : x)); }}>
-                <option value="">Ürün seç…</option>{(catalog ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}{c.brand ? ` · ${c.brand}` : ""} ({c.stock_qty} {c.unit})</option>)}
+                <option value="">{t("Ürün seç…")}</option>{(catalog ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}{c.brand ? ` · ${c.brand}` : ""} ({c.stock_qty} {c.unit})</option>)}
               </select></span>
-              <span className="inp"><input inputMode="decimal" value={l.qty} onChange={(e) => setProdLines(prodLines.map((x, j) => j === k ? { ...x, qty: e.target.value } : x))} className="text-right" aria-label="Adet" /></span>
-              <span className="inp"><input inputMode="decimal" value={l.price} onChange={(e) => setProdLines(prodLines.map((x, j) => j === k ? { ...x, price: e.target.value } : x))} className="text-right" aria-label="Birim fiyat" /></span>
-              <button type="button" className="btn ghost sm" onClick={() => setProdLines(prodLines.filter((_, j) => j !== k))} aria-label="Kaldır">✕</button>
-              {p && Number(l.qty) > p.stock_qty && <span className="col-span-4 text-[11px] text-warn">Stokta {p.stock_qty} {p.unit} var; satış stoğu eksiye düşürür.</span>}
+              <span className="inp"><input inputMode="decimal" value={l.qty} onChange={(e) => setProdLines(prodLines.map((x, j) => j === k ? { ...x, qty: e.target.value } : x))} className="text-right" aria-label={t("Adet")} /></span>
+              <span className="inp"><input inputMode="decimal" value={l.price} onChange={(e) => setProdLines(prodLines.map((x, j) => j === k ? { ...x, price: e.target.value } : x))} className="text-right" aria-label={t("Birim fiyat")} /></span>
+              <button type="button" className="btn ghost sm" onClick={() => setProdLines(prodLines.filter((_, j) => j !== k))} aria-label={t("Kaldır")}>✕</button>
+              {p && Number(l.qty) > p.stock_qty && <span className="col-span-4 text-[11px] text-warn">{t("Stokta {n} {unit} var; satış stoğu eksiye düşürür.", { n: p.stock_qty, unit: p.unit })}</span>}
             </div>
           ); })}
-          <button type="button" className="btn ghost sm justify-self-start" disabled={catalog === null} onClick={() => setProdLines([...prodLines, { productId: "", qty: "1", price: "" }])}>{catalog === null ? "Ürünler yükleniyor…" : catalog.length ? "+ Ürün ekle" : "+ Ürün ekle (önce Ürünler sayfasından ekleyin)"}</button>
+          <button type="button" className="btn ghost sm justify-self-start" disabled={catalog === null} onClick={() => setProdLines([...prodLines, { productId: "", qty: "1", price: "" }])}>{catalog === null ? t("Ürünler yükleniyor…") : catalog.length ? t("+ Ürün ekle") : t("+ Ürün ekle (önce Ürünler sayfasından ekleyin)")}</button>
         </div>
         <div className="grid grid-cols-[1fr_auto] gap-3 items-center border-t border-line pt-3">
-          <label className="f">İndirim %<span className="inp"><input inputMode="decimal" value={disc} onChange={(e) => setDisc(e.target.value)} /></span></label>
-          <div className="text-right"><div className="text-xs text-muted">Toplam</div><div className="font-display text-2xl font-bold num">{money(total)}</div></div>
+          <label className="f">{t("İndirim %")}<span className="inp"><input inputMode="decimal" value={disc} onChange={(e) => setDisc(e.target.value)} /></span></label>
+          <div className="text-right"><div className="text-xs text-muted">{t("Toplam")}</div><div className="font-display text-2xl font-bold num">{money(total)}</div></div>
         </div>
         <div className="grid gap-2">
-          <div className="eyebrow">Ödeme</div>
+          <div className="eyebrow">{t("Ödeme")}</div>
           {v.customer && (
             <div className={`flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 ${balance > 0 ? "bg-gold-soft" : "bg-sunk"}`}>
-              <span className="text-sm">Müşteri bakiyesi: <b className="num">{money(balance)}</b></span>
+              <span className="text-sm">{t("Müşteri bakiyesi:")} <b className="num">{money(balance)}</b></span>
               <span className="flex-1" />
-              {balance > 0 && <button type="button" className="btn sm" onClick={() => { const i = pays.findIndex((x) => x.method === "balance"); const amt = String(Math.min(balance, Math.max(0, remaining + (i >= 0 ? Number(pays[i].amount) || 0 : 0)))); if (i >= 0) setPay(i, { amount: amt }); else setPays([{ method: "balance", amount: amt }, ...pays.filter((x) => x.amount)]); }}>Bakiyeden düş</button>}
-              <button type="button" className="btn ghost sm" onClick={() => setTopUp(true)}>+ Bakiye yükle</button>
+              {balance > 0 && <button type="button" className="btn sm" onClick={() => { const i = pays.findIndex((x) => x.method === "balance"); const amt = String(Math.min(balance, Math.max(0, remaining + (i >= 0 ? Number(pays[i].amount) || 0 : 0)))); if (i >= 0) setPay(i, { amount: amt }); else setPays([{ method: "balance", amount: amt }, ...pays.filter((x) => x.amount)]); }}>{t("Bakiyeden düş")}</button>}
+              <button type="button" className="btn ghost sm" onClick={() => setTopUp(true)}>{t("+ Bakiye yükle")}</button>
             </div>
           )}
           {(pkgs.length > 0 || points > 0) && (
             <div className="flex flex-wrap gap-1.5 text-xs">
-              {pkgs.map((p) => { const used = Object.values(pkgUse).filter((x) => x === p.id).length; const left = p.total_sessions - p.used_sessions - used; return <button key={p.id} type="button" className={`pill ${used ? "good" : ""} hover:brightness-95`} disabled={left <= 0 && !used} onClick={() => used ? setPkgUse(Object.fromEntries(Object.entries(pkgUse).filter(([, x]) => x !== p.id))) : applyPackage(p.id)}>Paket: {p.name} · kalan {left}{used ? ` · ${used} kalem düşüldü ✓` : " → düş"}</button>; })}
-              {points > 0 && <span className="pill">{points} puan</span>}
+              {pkgs.map((p) => { const used = Object.values(pkgUse).filter((x) => x === p.id).length; const left = p.total_sessions - p.used_sessions - used; return <button key={p.id} type="button" className={`pill ${used ? "good" : ""} hover:brightness-95`} disabled={left <= 0 && !used} onClick={() => used ? setPkgUse(Object.fromEntries(Object.entries(pkgUse).filter(([, x]) => x !== p.id))) : applyPackage(p.id)}>{t("Paket: {name} · kalan {n}", { name: p.name, n: left })}{used ? ` · ${t("{n} kalem düşüldü ✓", { n: used })}` : ` → ${t("düş")}`}</button>; })}
+              {points > 0 && <span className="pill">{t("{n} puan", { n: points })}</span>}
             </div>
           )}
           {pays.map((p, i) => (
             <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-              <span className="inp"><select value={p.method} onChange={(e) => setPay(i, { method: e.target.value as PayMethod })}>{(Object.keys(METHOD) as PayMethod[]).filter((m) => m !== "package").map((m) => <option key={m} value={m}>{METHOD[m]}{m === "points" ? ` (${points})` : m === "balance" ? ` (${money(balance)})` : ""}</option>)}</select></span>
+              <span className="inp"><select value={p.method} onChange={(e) => setPay(i, { method: e.target.value as PayMethod })}>{(Object.keys(METHOD) as PayMethod[]).filter((m) => m !== "package").map((m) => <option key={m} value={m}>{t(METHOD[m])}{m === "points" ? ` (${points})` : m === "balance" ? ` (${money(balance)})` : ""}</option>)}</select></span>
               <span className="inp"><input inputMode="decimal" placeholder={String(Math.max(0, remaining + (Number(p.amount) || 0)))} value={p.amount} onChange={(e) => setPay(i, { amount: e.target.value })} /></span>
-              <button type="button" className="btn ghost sm" onClick={() => fillRemaining(i)} title="Kalanı doldur">↵</button>
-              {p.method === "gift_card" && <span className="inp col-span-3"><input placeholder="Hediye çeki kodu (BB-XXXX-XXXX)" value={p.ref ?? ""} onChange={(e) => setPay(i, { ref: e.target.value.toUpperCase() })} /></span>}
+              <button type="button" className="btn ghost sm" onClick={() => fillRemaining(i)} title={t("Kalanı doldur")}>↵</button>
+              {p.method === "gift_card" && <span className="inp col-span-3"><input placeholder={t("Hediye çeki kodu (BB-XXXX-XXXX)")} value={p.ref ?? ""} onChange={(e) => setPay(i, { ref: e.target.value.toUpperCase() })} /></span>}
             </div>
           ))}
           <div className="flex gap-2 items-center">
-            <button type="button" className="btn ghost sm" onClick={() => setPays([...pays, { method: "card", amount: "" }])}>+ Karışık ödeme</button>
-            <span className={`ml-auto text-sm num ${Math.abs(remaining) < 0.5 ? "text-good" : "text-bad"}`}>{Math.abs(remaining) < 0.5 ? "Tutar eşleşti" : `Kalan ${money(remaining)}`}</span>
+            <button type="button" className="btn ghost sm" onClick={() => setPays([...pays, { method: "card", amount: "" }])}>{t("+ Karışık ödeme")}</button>
+            <span className={`ml-auto text-sm num ${Math.abs(remaining) < 0.5 ? "text-good" : "text-bad"}`}>{Math.abs(remaining) < 0.5 ? t("Tutar eşleşti") : t("Kalan {amount}", { amount: money(remaining) })}</span>
           </div>
         </div>
         {err && <p className="pill bad">{err}</p>}
         <div className="flex justify-end gap-2">
-          <button className="btn ghost" onClick={onClose}>Vazgeç</button>
-          <button className="btn" disabled={pending || Math.abs(remaining) >= 0.5 || total < 0} onClick={submit}>{pending ? "Kaydediliyor…" : "Ödemeyi kaydet"}</button>
+          <button className="btn ghost" onClick={onClose}>{t("Vazgeç")}</button>
+          <button className="btn" disabled={pending || Math.abs(remaining) >= 0.5 || total < 0} onClick={submit}>{pending ? t("Kaydediliyor…") : t("Ödemeyi kaydet")}</button>
         </div>
       </div>
       {topUp && v.customer && <TopUpDialog customerId={v.customer.id} customerName={fullName(v.customer)} balance={balance} onClose={() => setTopUp(false)} onDone={(amt) => { setBalance((b) => b + amt); setTopUp(false); }} />}

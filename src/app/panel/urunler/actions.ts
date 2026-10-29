@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { requireOps } from "@/lib/auth";
 import type { PayMethod } from "@/lib/database.types";
+import { getT } from "@/lib/i18n/server";
 
 const num = (v: FormDataEntryValue | null, d = 0) => { const n = Number(String(v ?? "").replace(",", ".")); return Number.isFinite(n) ? n : d; };
 
@@ -22,14 +23,14 @@ export async function saveProduct(_prev: { error: string; ok?: boolean }, fd: Fo
     notes: String(fd.get("notes") ?? ""),
     updated_at: new Date().toISOString(),
   };
-  if (!row.name) return { error: "Ürün adı gerekli." };
+  if (!row.name) return { error: (await getT())("Ürün adı gerekli.") };
   if (id) {
     const { error } = await supabase.from("products").update(row).eq("id", id);
     if (error) return { error: error.message };
   } else {
     const initial = num(fd.get("initial_stock"));
     const { data, error } = await supabase.from("products").insert({ ...row, stock_qty: 0 }).select("id").single();
-    if (error || !data) return { error: error?.message ?? "Kaydedilemedi" };
+    if (error || !data) return { error: error?.message ?? (await getT())("Kaydedilemedi") };
     if (initial) await applyMove(data.id, "adjust", initial, row.cost_price || null, "Açılış stoğu");
   }
   revalidatePath("/panel/urunler");
@@ -40,7 +41,7 @@ export async function saveProduct(_prev: { error: string; ok?: boolean }, fd: Fo
 async function applyMove(productId: string, kind: "purchase" | "sale" | "use" | "adjust" | "return", qty: number, unitCost: number | null, note: string, extra?: { saleId?: string | null; staffId?: string | null }) {
   const { supabase, user } = await requireOps();
   const { data: p } = await supabase.from("products").select("stock_qty").eq("id", productId).single();
-  if (!p) return { ok: false as const, error: "Ürün bulunamadı." };
+  if (!p) return { ok: false as const, error: (await getT())("Ürün bulunamadı.") };
   await supabase.from("stock_moves").insert({ product_id: productId, kind, qty, unit_cost: unitCost, note, sale_id: extra?.saleId ?? null, staff_id: extra?.staffId ?? null, created_by: user.id });
   const patch: { stock_qty: number; cost_price?: number; updated_at: string } = { stock_qty: Math.round((Number(p.stock_qty) + qty) * 100) / 100, updated_at: new Date().toISOString() };
   if (kind === "purchase" && unitCost && unitCost > 0) patch.cost_price = unitCost;
@@ -58,7 +59,7 @@ export async function stockMove(input: { productId: string; kind: "purchase" | "
   }
   if (input.kind === "use") qty = -Math.abs(qty);
   if (input.kind === "purchase") qty = Math.abs(qty);
-  if (!qty) return { ok: false as const, error: "Miktar gerekli." };
+  if (!qty) return { ok: false as const, error: (await getT())("Miktar gerekli.") };
   const note = input.note ?? (input.kind === "adjust" ? "Sayım düzeltmesi" : "");
   const r = await applyMove(input.productId, input.kind, qty, input.unitCost ?? null, note, { staffId: input.staffId ?? null });
   if (!r.ok) return r;
@@ -96,13 +97,14 @@ export async function restockSale(saleId: string) {
 export async function sellProducts(input: { customerId: string | null; lines: ProductLine[]; payments: { method: PayMethod; amount: number; ref?: string }[]; saleDate: string; notes?: string }) {
   const { supabase, user } = await requireOps();
   const lines = input.lines.filter((l) => l.productId && l.qty > 0);
-  if (!lines.length) return { ok: false as const, error: "En az bir ürün seçin." };
+  const t = await getT();
+  if (!lines.length) return { ok: false as const, error: t("En az bir ürün seçin.") };
   const total = Math.round(lines.reduce((s, l) => s + l.qty * l.unitPrice, 0) * 100) / 100;
   const paid = input.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  if (Math.abs(paid - total) > 0.5) return { ok: false as const, error: `Ödeme toplamı (${paid}) tutarla (${total}) eşleşmiyor.` };
-  if (input.payments.some((p) => ["gift_card", "points", "balance", "package"].includes(p.method) && Number(p.amount) > 0)) return { ok: false as const, error: "Doğrudan ürün satışında nakit/kart/havale kullanın; bakiye/çek için ziyaret üzerinden ödeme alın." };
+  if (Math.abs(paid - total) > 0.5) return { ok: false as const, error: t("Ödeme toplamı ({paid}) tutarla ({total}) eşleşmiyor.", { paid, total }) };
+  if (input.payments.some((p) => ["gift_card", "points", "balance", "package"].includes(p.method) && Number(p.amount) > 0)) return { ok: false as const, error: t("Doğrudan ürün satışında nakit/kart/havale kullanın; bakiye/çek için ziyaret üzerinden ödeme alın.") };
   const { data: sale, error } = await supabase.from("sales").insert({ customer_id: input.customerId, sale_date: input.saleDate, subtotal: total, discount: 0, total, notes: input.notes ?? "Ürün satışı", created_by: user.id }).select("id").single();
-  if (error || !sale) return { ok: false as const, error: error?.message ?? "Satış oluşturulamadı" };
+  if (error || !sale) return { ok: false as const, error: error?.message ?? t("Satış oluşturulamadı") };
   await addProductLines(sale.id, lines);
   const pays = input.payments.filter((p) => Number(p.amount) > 0).map((p) => ({ sale_id: sale.id, method: p.method, amount: Number(p.amount), ref: "" }));
   if (pays.length) await supabase.from("sale_payments").insert(pays);

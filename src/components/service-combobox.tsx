@@ -1,26 +1,30 @@
 "use client";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { money } from "@/lib/format";
+import { money, minLabel } from "@/lib/format";
+import { useT, useLang } from "@/lib/i18n/client";
+import { localName } from "@/lib/i18n/core";
 
-type Svc = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en?: string; duration_min: number; price: number };
-type Cat = { id: string; name_tr: string; sort_order: number };
+type Svc = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en?: string | null; name_ru?: string | null; duration_min: number; price: number };
+type Cat = { id: string; name_tr: string; name_en?: string | null; name_ru?: string | null; sort_order: number };
 
 const norm = (s: string) => s.toLocaleLowerCase("tr").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ı/g, "i");
 
 /** Yazarak aranabilen hizmet seçici: kod, Türkçe veya İngilizce ad; ↑↓ Enter Esc */
 export function ServiceCombobox({ services, categories, value, label, onPick, disabled }: { services: Svc[]; categories: Cat[]; value: string | null; label: string; onPick: (id: string) => void; disabled?: boolean }) {
   const listId = useId();
+  const t = useT();
+  const lang = useLang();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);
   const box = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
-  const catName = useMemo(() => new Map(categories.map((c) => [c.id, c.name_tr])), [categories]);
+  const catName = useMemo(() => new Map(categories.map((c) => [c.id, localName(c, lang)])), [categories, lang]);
   const catOrder = useMemo(() => new Map(categories.map((c) => [c.id, c.sort_order])), [categories]);
 
   const results = useMemo(() => {
     const terms = norm(q.trim()).split(/\s+/).filter(Boolean);
-    const all = services.map((s) => ({ s, hay: norm(`${s.code ?? ""} ${s.name_tr} ${s.name_en ?? ""} ${catName.get(s.category_id ?? "") ?? ""}`) }));
+    const all = services.map((s) => ({ s, hay: norm(`${s.code ?? ""} ${s.name_tr} ${s.name_en ?? ""} ${s.name_ru ?? ""} ${catName.get(s.category_id ?? "") ?? ""}`) }));
     const hit = terms.length ? all.filter((x) => terms.every((t) => x.hay.includes(t))) : all;
     // kod başta eşleşenler önce
     return hit.sort((a, b) => {
@@ -47,9 +51,9 @@ export function ServiceCombobox({ services, categories, value, label, onPick, di
     <div ref={box} className="relative">
       <span className="inp">
         <input
-          type="search" role="combobox" aria-expanded={open} aria-controls={listId} aria-label="Hizmet ara" disabled={disabled}
-          placeholder={current ? `${current.code ? current.code + " " : ""}${current.name_tr}` : label || "Hizmet ara… (kod veya ad)"}
-          value={open ? q : current ? `${current.code ? current.code + " " : ""}${current.name_tr}` : label}
+          type="search" role="combobox" aria-expanded={open} aria-controls={listId} aria-label={t("Hizmet ara")} disabled={disabled}
+          placeholder={current ? `${current.code ? current.code + " " : ""}${localName(current, lang)}` : label || t("Hizmet ara… (kod veya ad)")}
+          value={open ? q : current ? `${current.code ? current.code + " " : ""}${localName(current, lang)}` : label}
           onFocus={(e) => { setOpen(true); setQ(""); setHi(0); e.currentTarget.select(); }}
           onChange={(e) => { setQ(e.target.value); setHi(0); setOpen(true); }}
           onKeyDown={(e) => {
@@ -63,13 +67,13 @@ export function ServiceCombobox({ services, categories, value, label, onPick, di
       </span>
       {open && !disabled && (
         <ul id={listId} ref={list} role="listbox" className="absolute z-50 mt-1 left-0 min-w-full w-[min(520px,90vw)] max-h-72 overflow-y-auto rounded-xl border border-line bg-surface shadow-card py-1">
-          {!results.length && <li className="px-3 py-2 text-sm text-muted">Sonuç yok</li>}
+          {!results.length && <li className="px-3 py-2 text-sm text-muted">{t("Sonuç yok")}</li>}
           {results.map((s, i) => (
             <li key={s.id} data-i={i} role="option" aria-selected={i === hi}
               onMouseDown={(e) => { e.preventDefault(); pick(s.id); }} onMouseEnter={() => setHi(i)}
               className={`px-3 py-1.5 cursor-pointer grid grid-cols-[1fr_auto] gap-2 items-center ${i === hi ? "bg-green-soft" : ""} ${s.id === value ? "font-semibold" : ""}`}>
-              <span className="min-w-0"><span className="block truncate text-sm">{s.code ? <b className="num mr-1">{s.code}</b> : null}{s.name_tr}</span><span className="block text-[11px] text-muted truncate">{catName.get(s.category_id ?? "") ?? "Diğer"}</span></span>
-              <span className="text-[11px] text-muted num text-right whitespace-nowrap">{s.duration_min} dk · {money(s.price)}</span>
+              <span className="min-w-0"><span className="block truncate text-sm">{s.code ? <b className="num mr-1">{s.code}</b> : null}{localName(s, lang)}</span><span className="block text-[11px] text-muted truncate">{catName.get(s.category_id ?? "") ?? t("Diğer")}</span></span>
+              <span className="text-[11px] text-muted num text-right whitespace-nowrap">{s.duration_min} {minLabel(lang)} · {money(s.price)}</span>
             </li>
           ))}
         </ul>

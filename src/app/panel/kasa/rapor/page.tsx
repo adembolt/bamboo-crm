@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
-import { todayIso, addDays, money, fmtDate, minutesOfDay } from "@/lib/format";
+import { todayIso, addDays, money, fmtDate, minutesOfDay, fmtMonthYear } from "@/lib/format";
 import { Donut, Bars } from "@/components/charts";
 import { foldSlices, SERIES } from "@/lib/charts";
+import { getT, getLang } from "@/lib/i18n/server";
 
-export const metadata = { title: "Raporlar" };
+export async function generateMetadata() { return { title: (await getT())("Raporlar") }; }
 
 type Period = "day" | "week" | "month" | "custom";
 const METHOD: Record<string, string> = { cash: "Nakit", card: "Kart", transfer: "Havale", online: "Online", package: "Paket", gift_card: "Hediye çeki", other: "Diğer" };
@@ -24,6 +25,7 @@ export default async function ReportPage({ searchParams }: PageProps<"/panel/kas
   const to = typeof sp.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.to) ? sp.to : undefined;
   const { start, end } = range(p, from, to);
   const { supabase } = await requireSession();
+  const [t, lang] = [await getT(), await getLang()];
 
   const [{ data: sales }, { data: pays }, { data: items }, { data: exps }, { data: staff }, { data: cats }, { data: settings }] = await Promise.all([
     supabase.from("sales").select("id, sale_date, total, created_at").gte("sale_date", start).lte("sale_date", end),
@@ -40,12 +42,12 @@ export default async function ReportPage({ searchParams }: PageProps<"/panel/kas
   const expTotal = (exps ?? []).reduce((a, e) => a + Number(e.amount), 0);
 
   const agg = (rows: { key: string; value: number }[]) => { const m = new Map<string, number>(); for (const r of rows) m.set(r.key, (m.get(r.key) ?? 0) + r.value); return [...m.entries()].map(([label, value]) => ({ label, value })); };
-  const byMethod = agg((pays ?? []).map((x) => ({ key: METHOD[x.method] ?? x.method, value: Number(x.amount) })));
-  const staffName = (id: string | null) => staff?.find((s) => s.id === id)?.full_name ?? "Atanmamış";
-  const catName = (id: string | null | undefined) => cats?.find((c) => c.id === id)?.name_tr ?? "Diğer";
+  const byMethod = agg((pays ?? []).map((x) => ({ key: METHOD[x.method] ? t(METHOD[x.method]) : x.method, value: Number(x.amount) })));
+  const staffName = (id: string | null) => staff?.find((s) => s.id === id)?.full_name ?? t("Atanmamış");
+  const catName = (id: string | null | undefined) => cats?.find((c) => c.id === id)?.name_tr ?? t("Diğer");
   const byStaff = agg((items ?? []).map((x) => ({ key: staffName(x.staff_id), value: Number(x.total) })));
-  const byCat = agg((items ?? []).map((x) => ({ key: x.kind === "product" ? "Ürün satışı" : catName(x.visit_item?.service?.category_id), value: Number(x.total) })));
-  const byExp = agg((exps ?? []).map((x) => ({ key: x.category, value: Number(x.amount) })));
+  const byCat = agg((items ?? []).map((x) => ({ key: x.kind === "product" ? t("Ürün satışı") : catName(x.visit_item?.service?.category_id), value: Number(x.total) })));
+  const byExp = agg((exps ?? []).map((x) => ({ key: t(x.category), value: Number(x.amount) })));
   const topServices = agg((items ?? []).map((x) => ({ key: x.name, value: Number(x.total) }))).sort((a, b) => b.value - a.value).slice(0, 8);
 
   // Zaman serisi: gün → saat, diğerleri → gün
@@ -62,45 +64,45 @@ export default async function ReportPage({ searchParams }: PageProps<"/panel/kas
     series = [...days.entries()].map(([d, v]) => ({ label: fmtDate(d).slice(0, 5), value: v }));
   }
 
-  const q = (pp: Period, f?: string, t?: string) => `/panel/kasa/rapor?p=${pp}${f ? `&from=${f}` : ""}${t ? `&to=${t}` : ""}`;
+  const q = (pp: Period, f?: string, e?: string) => `/panel/kasa/rapor?p=${pp}${f ? `&from=${f}` : ""}${e ? `&to=${e}` : ""}`;
   const shift = (n: number) => p === "day" ? q("day", addDays(start, n)) : p === "week" ? q("week", addDays(start, 7 * n)) : p === "month" ? q("month", (() => { const [y, m] = start.split("-").map(Number); return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 10); })()) : q("custom", from, to);
-  const title = p === "day" ? fmtDate(start) : p === "week" ? `${fmtDate(start)} – ${fmtDate(end)}` : p === "month" ? new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" }).format(new Date(start + "T12:00:00")) : `${fmtDate(start)} – ${fmtDate(end)}`;
+  const title = p === "day" ? fmtDate(start) : p === "week" ? `${fmtDate(start)} – ${fmtDate(end)}` : p === "month" ? fmtMonthYear(start, lang) : `${fmtDate(start)} – ${fmtDate(end)}`;
 
   return (
     <div className="grid gap-4">
       <header className="flex items-center gap-2 flex-wrap">
-        <h1 className="text-xl font-bold">Raporlar</h1>
+        <h1 className="text-xl font-bold">{t("Raporlar")}</h1>
         <nav className="flex gap-1 bg-sunk p-1 rounded-lg">
-          {(["day", "week", "month", "custom"] as Period[]).map((pp) => <Link key={pp} href={q(pp)} className={`px-3 py-1 rounded-md text-sm font-semibold ${pp === p ? "bg-surface shadow-card" : "text-muted"}`}>{{ day: "Gün", week: "Hafta", month: "Ay", custom: "Aralık" }[pp]}</Link>)}
+          {(["day", "week", "month", "custom"] as Period[]).map((pp) => <Link key={pp} href={q(pp)} className={`px-3 py-1 rounded-md text-sm font-semibold ${pp === p ? "bg-surface shadow-card" : "text-muted"}`}>{t({ day: "Gün", week: "Hafta", month: "Ay", custom: "Aralık" }[pp])}</Link>)}
         </nav>
         {p !== "custom" ? (
           <span className="flex items-center gap-1"><Link className="btn ghost sm" href={shift(-1)}>‹</Link><b className="capitalize min-w-[140px] text-center">{title}</b><Link className="btn ghost sm" href={shift(1)}>›</Link></span>
         ) : (
-          <form className="flex items-center gap-2" action="/panel/kasa/rapor"><input type="hidden" name="p" value="custom" /><span className="inp"><input type="date" name="from" defaultValue={start} /></span><span className="text-muted">–</span><span className="inp"><input type="date" name="to" defaultValue={end} /></span><button className="btn ghost sm">Göster</button></form>
+          <form className="flex items-center gap-2" action="/panel/kasa/rapor"><input type="hidden" name="p" value="custom" /><span className="inp"><input type="date" name="from" defaultValue={start} /></span><span className="text-muted">–</span><span className="inp"><input type="date" name="to" defaultValue={end} /></span><button className="btn ghost sm">{t("Göster")}</button></form>
         )}
-        <Link className="btn ghost sm ml-auto" href="/panel/kasa">Günlük kasa</Link>
-        <Link className="btn ghost sm" href={`/panel/kasa/ay?m=${start.slice(0, 7)}`}>Ay özeti</Link>
+        <Link className="btn ghost sm ml-auto" href="/panel/kasa">{t("Günlük kasa")}</Link>
+        <Link className="btn ghost sm" href={`/panel/kasa/ay?m=${start.slice(0, 7)}`}>{t("Ay özeti")}</Link>
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi label="Ciro" value={money(gross)} sub={`net ${money(gross / (1 + kdv))} · ${(sales ?? []).length} satış`} accent />
-        <Kpi label="Ortalama fiş" value={(sales ?? []).length ? money(gross / (sales ?? []).length) : "—"} sub="satış başına" />
-        <Kpi label="Gider" value={money(expTotal)} sub={`${(exps ?? []).length} kayıt`} />
-        <Kpi label="Ciro − gider" value={money(gross - expTotal)} sub="hak ediş hariç" />
+        <Kpi label={t("Ciro")} value={money(gross)} sub={t("net {net} · {n} satış", { net: money(gross / (1 + kdv)), n: (sales ?? []).length })} accent />
+        <Kpi label={t("Ortalama fiş")} value={(sales ?? []).length ? money(gross / (sales ?? []).length) : "—"} sub={t("satış başına")} />
+        <Kpi label={t("Gider")} value={money(expTotal)} sub={t("{n} kayıt", { n: (exps ?? []).length })} />
+        <Kpi label={t("Ciro − gider")} value={money(gross - expTotal)} sub={t("hak ediş hariç")} />
       </div>
 
-      <Bars title={p === "day" ? "Saat bazında ciro" : "Günlük ciro"} points={series} />
+      <Bars title={p === "day" ? t("Saat bazında ciro") : t("Günlük ciro")} points={series} />
 
       <div className="grid md:grid-cols-2 gap-4">
-        <Donut title="Ödeme yöntemi" slices={foldSlices(byMethod)} />
-        <Donut title="Kategoriye göre ciro" slices={foldSlices(byCat, 6)} />
-        <Donut title="Personele göre ciro" slices={foldSlices(byStaff, 6)} />
-        <Donut title="Gider dağılımı" slices={foldSlices(byExp.map((e, i) => ({ ...e, color: SERIES[(i + 1) % SERIES.length] })), 6)} empty="Bu dönemde gider yok" />
+        <Donut title={t("Ödeme yöntemi")} slices={foldSlices(byMethod)} />
+        <Donut title={t("Kategoriye göre ciro")} slices={foldSlices(byCat, 6)} />
+        <Donut title={t("Personele göre ciro")} slices={foldSlices(byStaff, 6)} />
+        <Donut title={t("Gider dağılımı")} slices={foldSlices(byExp.map((e, i) => ({ ...e, color: SERIES[(i + 1) % SERIES.length] })), 6)} empty={t("Bu dönemde gider yok")} />
       </div>
 
       <section className="panel grid gap-2">
-        <h2 className="font-bold">En çok ciro getiren hizmetler</h2>
-        {!topServices.length ? <p className="text-sm text-muted">Veri yok</p> : (
+        <h2 className="font-bold">{t("En çok ciro getiren hizmetler")}</h2>
+        {!topServices.length ? <p className="text-sm text-muted">{t("Veri yok")}</p> : (
           <div className="grid gap-1">
             {topServices.map((s, i) => (
               <div key={s.label} className="grid grid-cols-[1fr_minmax(60px,180px)_90px] gap-3 items-center text-sm">

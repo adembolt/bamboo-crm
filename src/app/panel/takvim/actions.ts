@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireOps } from "@/lib/auth";
 import { localToIso, normalizePhone } from "@/lib/format";
 import type { VisitStatus } from "@/lib/database.types";
+import { getT } from "@/lib/i18n/server";
 
 type Result = { ok: true; visitId: string; itemId: string } | { ok: false; error: string };
 
@@ -24,13 +25,14 @@ export type NewItemInput = {
  */
 export async function addVisitItem(input: NewItemInput): Promise<Result> {
   const { supabase, user } = await requireOps();
+  const t = await getT();
 
   const { data: service } = await supabase
     .from("services")
     .select("id, name_tr, duration_min, buffer_min, price")
     .eq("id", input.serviceId)
     .single();
-  if (!service) return { ok: false, error: "Hizmet bulunamadı." };
+  if (!service) return { ok: false, error: t("Hizmet bulunamadı.") };
 
   // Müşteri
   let customerId = input.customerId ?? null;
@@ -52,7 +54,7 @@ export async function addVisitItem(input: NewItemInput): Promise<Result> {
         })
         .select("id")
         .single();
-      if (error || !c) return { ok: false, error: "Müşteri oluşturulamadı: " + (error?.message ?? "") };
+      if (error || !c) return { ok: false, error: t("Müşteri oluşturulamadı: {msg}", { msg: error?.message ?? "" }) };
       customerId = c.id;
     }
   }
@@ -75,7 +77,7 @@ export async function addVisitItem(input: NewItemInput): Promise<Result> {
       .insert({ customer_id: customerId, visit_date: input.date, status: "confirmed", source: "salon", created_by: user.id })
       .select("id")
       .single();
-    if (error || !v) return { ok: false, error: "Ziyaret açılamadı: " + (error?.message ?? "") };
+    if (error || !v) return { ok: false, error: t("Ziyaret açılamadı: {msg}", { msg: error?.message ?? "" }) };
     visitId = v.id;
   }
 
@@ -100,8 +102,8 @@ export async function addVisitItem(input: NewItemInput): Promise<Result> {
 
   if (error || !item) {
     const msg = error?.message.includes("visit_items_no_staff_overlap")
-      ? "Bu personelin o saatte başka bir randevusu var."
-      : "Kalem eklenemedi: " + (error?.message ?? "");
+      ? t("Bu personelin o saatte başka bir randevusu var.")
+      : t("Kalem eklenemedi: {msg}", { msg: error?.message ?? "" });
     return { ok: false, error: msg };
   }
 
@@ -153,14 +155,15 @@ export async function deleteItem(itemId: string) {
 
 export async function moveItem(itemId: string, date: string, startHHMM: string, staffId: string | null) {
   const { supabase } = await requireOps();
+  const t = await getT();
   const { data: item } = await supabase.from("visit_items").select("starts_at, ends_at").eq("id", itemId).single();
-  if (!item) return { ok: false as const, error: "Kalem bulunamadı." };
+  if (!item) return { ok: false as const, error: t("Kalem bulunamadı.") };
   const dur = new Date(item.ends_at).getTime() - new Date(item.starts_at).getTime();
   const startsAt = localToIso(date, startHHMM);
   const endsAt = new Date(new Date(startsAt).getTime() + dur).toISOString();
   const { error } = await supabase.from("visit_items").update({ starts_at: startsAt, ends_at: endsAt, staff_id: staffId }).eq("id", itemId);
   if (error) {
-    return { ok: false as const, error: error.message.includes("overlap") ? "O saatte personel dolu." : error.message };
+    return { ok: false as const, error: error.message.includes("overlap") ? t("O saatte personel dolu.") : error.message };
   }
   revalidatePath("/panel/takvim");
   return { ok: true as const };

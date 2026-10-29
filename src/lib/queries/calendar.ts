@@ -54,10 +54,10 @@ export async function loadDay(supabase: SupabaseClient<Database>, isoDate: strin
 
 export async function loadServicesForPicker(supabase: SupabaseClient<Database>) {
   const [cats, svcs] = await Promise.all([
-    supabase.from("service_categories").select("id, name_tr, sort_order, color").eq("is_active", true).order("sort_order"),
+    supabase.from("service_categories").select("id, name_tr, name_en, name_ru, sort_order, color").eq("is_active", true).order("sort_order"),
     supabase
       .from("services")
-      .select("id, category_id, code, name_tr, name_en, duration_min, buffer_min, price, kind")
+      .select("id, category_id, code, name_tr, name_en, name_ru, duration_min, buffer_min, price, kind")
       .eq("is_active", true)
       .order("sort_order")
       .order("name_tr"),

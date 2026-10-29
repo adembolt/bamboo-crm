@@ -3,6 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/database.types";
+import { getT } from "@/lib/i18n/server";
 
 export const getSession = cache(async () => {
   const supabase = await createClient();
@@ -25,7 +26,7 @@ export async function requireOps() {
   const s = await requireSession();
   const role = s.profile?.role;
   if (!role || !["owner", "manager", "reception"].includes(role)) {
-    throw new Error("Bu işlem için yetkiniz yok.");
+    throw new Error((await getT())("Bu işlem için yetkiniz yok."));
   }
   return s;
 }
@@ -34,7 +35,7 @@ export async function requireManager() {
   const s = await requireSession();
   const role = s.profile?.role;
   if (!role || !["owner", "manager"].includes(role)) {
-    throw new Error("Bu işlem için yönetici yetkisi gerekir.");
+    throw new Error((await getT())("Bu işlem için yönetici yetkisi gerekir."));
   }
   return s;
 }

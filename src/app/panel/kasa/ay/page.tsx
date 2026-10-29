@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { staffEarnings } from "@/lib/queries/kasa";
-import { money, fmtDate, todayIso } from "@/lib/format";
+import { money, fmtDate, todayIso, fmtMonthYear } from "@/lib/format";
+import { getT, getLang } from "@/lib/i18n/server";
 import { PayoutForm } from "./payout-form";
 import type { Staff } from "@/lib/database.types";
 
-export const metadata = { title: "Ay özeti" };
+export async function generateMetadata() { return { title: (await getT())("Ay özeti") }; }
 
 function monthRange(m: string) {
   const [y, mo] = m.split("-").map(Number);
@@ -21,6 +22,7 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
   const { start, end } = monthRange(m);
   const { supabase, profile } = await requireSession();
   const isManager = !!profile && ["owner", "manager"].includes(profile.role);
+  const [t, lang] = [await getT(), await getLang()];
 
   const [{ data: sales }, { data: pays }, { data: exps }, { data: staff }, { data: payouts }, earn, { data: settings }] = await Promise.all([
     supabase.from("sales").select("id, sale_date, total").gte("sale_date", start).lte("sale_date", end),
@@ -57,22 +59,22 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
     <div className="grid gap-4">
       <header className="flex items-center gap-3 flex-wrap">
         <Link className="btn ghost sm" href={`/panel/kasa/ay?m=${shiftMonth(m, -1)}`}>‹</Link>
-        <h1 className="text-xl font-bold capitalize">{new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" }).format(new Date(start + "T12:00:00"))}</h1>
+        <h1 className="text-xl font-bold capitalize">{fmtMonthYear(start, lang)}</h1>
         <Link className="btn ghost sm" href={`/panel/kasa/ay?m=${shiftMonth(m, 1)}`}>›</Link>
-        <Link className="btn ghost sm ml-auto" href={`/panel/kasa/rapor?p=month&from=${start}`}>Grafikler</Link>
-        <Link className="btn ghost sm" href="/panel/kasa">← Günlük kasa</Link>
+        <Link className="btn ghost sm ml-auto" href={`/panel/kasa/rapor?p=month&from=${start}`}>{t("Grafikler")}</Link>
+        <Link className="btn ghost sm" href="/panel/kasa">{t("← Günlük kasa")}</Link>
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Kpi label="Aylık ciro" value={money(gross)} sub={`${(sales ?? []).length} satış · net ${money(net)}`} accent />
-        <Kpi label="Nakit / Kart" value={`${money(byMethod.cash ?? 0)} / ${money(byMethod.card ?? 0)}`} sub={`havale ${money(byMethod.transfer ?? 0)}`} />
-        <Kpi label="Giderler" value={money(expTotal)} sub={Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k, v]) => `${k} ${money(v)}`).join(" · ") || "—"} />
-        <Kpi label="Personel hak edişi" value={money(totalDue)} sub="hizmet+ürün yüzdesi" />
-        <Kpi label="Kalan (kaba)" value={money(gross - expTotal - totalDue)} sub="ciro − gider − hak ediş" />
+        <Kpi label={t("Aylık ciro")} value={money(gross)} sub={t("{n} satış · net {net}", { n: (sales ?? []).length, net: money(net) })} accent />
+        <Kpi label={t("Nakit / Kart")} value={`${money(byMethod.cash ?? 0)} / ${money(byMethod.card ?? 0)}`} sub={t("havale {amount}", { amount: money(byMethod.transfer ?? 0) })} />
+        <Kpi label={t("Giderler")} value={money(expTotal)} sub={Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k, v]) => `${t(k)} ${money(v)}`).join(" · ") || "—"} />
+        <Kpi label={t("Personel hak edişi")} value={money(totalDue)} sub={t("hizmet+ürün yüzdesi")} />
+        <Kpi label={t("Kalan (kaba)")} value={money(gross - expTotal - totalDue)} sub={t("ciro − gider − hak ediş")} />
       </div>
 
       <section className="panel grid gap-2">
-        <h2 className="text-lg font-bold">Günlük ciro</h2>
+        <h2 className="text-lg font-bold">{t("Günlük ciro")}</h2>
         <div className="grid gap-1">
           {[...byDay.entries()].sort().map(([d, v]) => (
             <Link key={d} href={`/panel/kasa?d=${d}`} className="grid grid-cols-[72px_1fr_90px] gap-2 items-center text-sm hover:bg-sunk rounded px-1">
@@ -81,19 +83,19 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
               <span className="num font-bold text-right">{money(v)}</span>
             </Link>
           ))}
-          {!byDay.size && <p className="text-sm text-muted">Bu ay satış yok.</p>}
+          {!byDay.size && <p className="text-sm text-muted">{t("Bu ay satış yok.")}</p>}
         </div>
       </section>
 
       <section className="panel grid gap-3">
-        <h2 className="text-lg font-bold">Personel hak edişi</h2>
+        <h2 className="text-lg font-bold">{t("Personel hak edişi")}</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
-            <thead className="text-[11px] uppercase tracking-wide text-muted bg-sunk"><tr><th className="text-left px-3 py-2">Personel</th><th className="text-right px-3 py-2">Hizmet cirosu</th><th className="text-right px-3 py-2">Ürün</th><th className="text-right px-3 py-2">Hak ediş</th><th className="text-right px-3 py-2">Avans/prim</th><th className="text-right px-3 py-2">Ödenen</th><th className="text-right px-3 py-2">Kalan</th></tr></thead>
+            <thead className="text-[11px] uppercase tracking-wide text-muted bg-sunk"><tr><th className="text-left px-3 py-2">{t("Personel")}</th><th className="text-right px-3 py-2">{t("Hizmet cirosu")}</th><th className="text-right px-3 py-2">{t("Ürün")}</th><th className="text-right px-3 py-2">{t("Hak ediş")}</th><th className="text-right px-3 py-2">{t("Avans/prim")}</th><th className="text-right px-3 py-2">{t("Ödenen")}</th><th className="text-right px-3 py-2">{t("Kalan")}</th></tr></thead>
             <tbody className="divide-y divide-line">
               {staffRows.map(({ s, e, due, advances, paid, remaining }) => (
                 <tr key={s.id}>
-                  <td className="px-3 py-2"><b>{s.full_name}</b><div className="text-[11px] text-muted">{s.pay_model === "daily_prim" ? "günlük prim" : s.pay_model === "percent" ? "ay sonu yüzde" : "sabit"} · %{s.pay_percent}{Number(s.product_percent) ? ` / ürün %${s.product_percent}` : ""}</div></td>
+                  <td className="px-3 py-2"><b>{s.full_name}</b><div className="text-[11px] text-muted">{t(s.pay_model === "daily_prim" ? "günlük prim" : s.pay_model === "percent" ? "ay sonu yüzde" : "sabit")} · %{s.pay_percent}{Number(s.product_percent) ? ` / ${t("ürün %{n}", { n: s.product_percent })}` : ""}</div></td>
                   <td className="px-3 py-2 text-right num">{money(e.service)}</td>
                   <td className="px-3 py-2 text-right num">{money(e.product)}</td>
                   <td className="px-3 py-2 text-right num font-bold">{money(due)}</td>

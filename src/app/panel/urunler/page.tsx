@@ -1,12 +1,17 @@
 import { requireSession } from "@/lib/auth";
 import { money } from "@/lib/format";
 import { ProductsUI } from "./products-ui";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata = { title: "Ürünler" };
+export async function generateMetadata() {
+  const t = await getT();
+  return { title: t("Ürünler") };
+}
 
 export default async function ProductsPage({ searchParams }: PageProps<"/panel/urunler">) {
   const sp = await searchParams;
   const { supabase, profile } = await requireSession();
+  const t = await getT();
   const canWrite = !!profile && ["owner", "manager", "reception"].includes(profile.role);
   const [{ data: products }, { data: staff }, { data: moves }] = await Promise.all([
     supabase.from("products").select("*").order("is_active", { ascending: false }).order("name"),
@@ -21,13 +26,13 @@ export default async function ProductsPage({ searchParams }: PageProps<"/panel/u
   return (
     <div className="grid gap-4">
       <header className="flex items-center gap-3 flex-wrap">
-        <h1 className="text-xl font-bold">Ürünler &amp; stok</h1>
+        <h1 className="text-xl font-bold">{t("Ürünler & stok")}</h1>
       </header>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi label="Aktif ürün" value={String(active.length)} sub={`${active.filter((p) => p.is_retail).length} satışta`} />
-        <Kpi label="Kritik stok" value={String(low.length)} sub={low.slice(0, 2).map((p) => p.name).join(", ") || "yok"} warn={low.length > 0} />
-        <Kpi label="Stok değeri (alış)" value={money(value)} sub="eldeki miktar × alış fiyatı" />
-        <Kpi label="Satış değeri" value={money(retailValue)} sub="satışa açık ürünler" />
+        <Kpi label={t("Aktif ürün")} value={String(active.length)} sub={t("{n} satışta", { n: active.filter((p) => p.is_retail).length })} />
+        <Kpi label={t("Kritik stok")} value={String(low.length)} sub={low.slice(0, 2).map((p) => p.name).join(", ") || t("yok")} warn={low.length > 0} />
+        <Kpi label={t("Stok değeri (alış)")} value={money(value)} sub={t("eldeki miktar × alış fiyatı")} />
+        <Kpi label={t("Satış değeri")} value={money(retailValue)} sub={t("satışa açık ürünler")} />
       </div>
       <ProductsUI products={list} staff={staff ?? []} moves={(moves ?? []).map((m) => ({ ...m, qty: Number(m.qty), unit_cost: m.unit_cost == null ? null : Number(m.unit_cost), staff_name: m.staff?.full_name ?? null }))} canWrite={canWrite} initialFilter={typeof sp.f === "string" ? sp.f : ""} />
     </div>

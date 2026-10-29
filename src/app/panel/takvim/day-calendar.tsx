@@ -8,9 +8,11 @@ import { addVisitItem, type NewItemInput } from "./actions";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
 import { VisitEditor } from "./visit-editor";
 import { StaffAvatar } from "@/components/staff-avatar";
+import { useT, useLang } from "@/lib/i18n/client";
+import { localName } from "@/lib/i18n/core";
 
-type ServiceLite = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en: string; duration_min: number; buffer_min: number; price: number; kind: string };
-type CategoryLite = { id: string; name_tr: string; sort_order: number; color: string };
+type ServiceLite = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en: string; name_ru?: string | null; duration_min: number; buffer_min: number; price: number; kind: string };
+type CategoryLite = { id: string; name_tr: string; name_en?: string | null; name_ru?: string | null; sort_order: number; color: string };
 
 const PX_PER_MIN = 2; // 15 dk = 30px
 const GRID_MIN = 15;
@@ -28,6 +30,7 @@ export function DayCalendar(props: {
   canWrite: boolean;
 }) {
   const { date, staff, items, settings, canWrite } = props;
+  const t = useT();
   const openMin = toMin(settings.open_time);
   const closeMin = toMin(settings.close_time);
   const totalMin = closeMin - openMin;
@@ -73,29 +76,29 @@ export function DayCalendar(props: {
     id: s.id, name: s.full_name, title: s.title, color: s.color, photo: s.photo_url, items: byStaff.m.get(s.id) ?? [],
   }));
   const hiddenWithItems = staff.filter((s) => hidden.has(s.id) && (byStaff.m.get(s.id)?.length ?? 0) > 0);
-  if (byStaff.unassigned.length) columns.push({ id: null, name: "Atanmamış", title: "", color: "#9aa69c", photo: null, items: byStaff.unassigned });
+  if (byStaff.unassigned.length) columns.push({ id: null, name: t("Atanmamış"), title: "", color: "#9aa69c", photo: null, items: byStaff.unassigned });
 
   return (
     <div className="panel p-0 overflow-hidden">
-      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-line bg-surface" aria-label="Takvimde görünen personel">
-        <span className="eyebrow mr-1">Göster</span>
+      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-line bg-surface" aria-label={t("Takvimde görünen personel")}>
+        <span className="eyebrow mr-1">{t("Göster")}</span>
         {staff.map((s) => {
           const on = !hidden.has(s.id);
           const n = byStaff.m.get(s.id)?.length ?? 0;
           return (
             <button key={s.id} type="button" onClick={() => toggleStaff(s.id)} aria-pressed={on}
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition ${on ? "bg-surface border-line text-ink" : "bg-sunk border-transparent text-muted line-through"}`}
-              title={on ? "Gizle" : "Göster"}>
+              title={on ? t("Gizle") : t("Göster")}>
               <span className="w-2.5 h-2.5 rounded-full" style={{ background: on ? s.color : "var(--line)" }} />
               {s.full_name.split(" ")[0]}{n > 0 && <span className="num opacity-70">·{n}</span>}
             </button>
           );
         })}
         <span className="ml-auto flex gap-1">
-          {hidden.size > 0 && <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set())}>Tümünü göster</button>}
-          <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set(staff.filter((s) => !(byStaff.m.get(s.id)?.length)).map((s) => s.id)))}>Sadece randevusu olanlar</button>
+          {hidden.size > 0 && <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set())}>{t("Tümünü göster")}</button>}
+          <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set(staff.filter((s) => !(byStaff.m.get(s.id)?.length)).map((s) => s.id)))}>{t("Sadece randevusu olanlar")}</button>
         </span>
-        {hiddenLoaded && hiddenWithItems.length > 0 && <span className="w-full text-[11px] text-warn">Gizli ama bugün randevusu olan: {hiddenWithItems.map((s) => s.full_name).join(", ")}</span>}
+        {hiddenLoaded && hiddenWithItems.length > 0 && <span className="w-full text-[11px] text-warn">{t("Gizli ama bugün randevusu olan: {names}", { names: hiddenWithItems.map((s) => s.full_name).join(", ") })}</span>}
       </div>
       <div className="overflow-x-auto lg:overflow-x-visible">
         <div className="min-w-[640px] lg:min-w-0" style={{ display: "grid", gridTemplateColumns: `46px repeat(${columns.length}, minmax(0, 1fr))` }}>
@@ -107,7 +110,7 @@ export function DayCalendar(props: {
                 {c.id ? <StaffAvatar staff={{ id: c.id, full_name: c.name, color: c.color, photo_url: c.photo }} size={34} editable={props.canManage} /> : <span className="w-2.5 h-2.5 rounded-full flex-none" style={{ background: c.color }} />}
                 <div className="min-w-0">
                   <div className="font-semibold truncate text-sm">{c.name}</div>
-                  <div className="text-[11px] text-muted truncate">{c.title || `${c.items.length} randevu`}</div>
+                  <div className="text-[11px] text-muted truncate">{c.title || t("{n} randevu", { n: c.items.length })}</div>
                 </div>
               </div>
             </div>
@@ -134,12 +137,12 @@ export function DayCalendar(props: {
                 onSlotClick(col.id, openMin + (e.clientY - rect.top) / PX_PER_MIN);
               }}
               role={canWrite ? "button" : undefined}
-              aria-label={`${col.name} sütunu`}
+              aria-label={t("{name} sütunu", { name: col.name })}
             >
-              {props.timeOff.filter((t) => t.staff_id === col.id).map((t) => {
-                const a = Math.max(openMin, minutesOfDay(t.starts_at)), b = Math.min(closeMin, minutesOfDay(t.ends_at));
+              {props.timeOff.filter((o) => o.staff_id === col.id).map((o) => {
+                const a = Math.max(openMin, minutesOfDay(o.starts_at)), b = Math.min(closeMin, minutesOfDay(o.ends_at));
                 if (b <= a) return null;
-                return <div key={t.starts_at} className="absolute left-0 right-0 bg-sunk/80 text-[11px] text-muted px-2 py-1" style={{ top: (a - openMin) * PX_PER_MIN, height: (b - a) * PX_PER_MIN }}>{t.reason || "Müsait değil"}</div>;
+                return <div key={o.starts_at} className="absolute left-0 right-0 bg-sunk/80 text-[11px] text-muted px-2 py-1" style={{ top: (a - openMin) * PX_PER_MIN, height: (b - a) * PX_PER_MIN }}>{o.reason || t("Müsait değil")}</div>;
               })}
               {col.items.map((it) => {
                 const a = minutesOfDay(it.starts_at), b = minutesOfDay(it.ends_at);
@@ -163,7 +166,7 @@ export function DayCalendar(props: {
                     title={`${fmtTime(it.starts_at)}–${fmtTime(it.ends_at)} ${it.service_name}`}
                   >
                     <div className="text-[12px] font-bold truncate leading-tight">
-                      {c ? fullName(c) : "Müşteri yok"} {multi && <span className="pill gold ml-1 px-1.5 py-0 text-[10px]">çoklu</span>}
+                      {c ? fullName(c) : t("Müşteri yok")} {multi && <span className="pill gold ml-1 px-1.5 py-0 text-[10px]">{t("çoklu")}</span>}
                     </div>
                     <div className="text-[11px] text-muted truncate leading-tight">{fmtTime(it.starts_at)} · {it.service_name}</div>
                   </button>
@@ -226,6 +229,8 @@ function NewItemDialog(props: {
   onCreated: (visitId: string) => void;
 }) {
   const router = useRouter();
+  const t = useT();
+  const lang = useLang();
   const [pending, start] = useTransition();
   const [err, setErr] = useState("");
   const [staffId, setStaffId] = useState<string | null>(props.draft.staffId);
@@ -239,20 +244,20 @@ function NewItemDialog(props: {
   const [newCustomer, setNewCustomer] = useState<{ first_name: string; last_name: string; phone: string } | null>(null);
 
   const filtered = useMemo(() => {
-    const t = q.trim().toLowerCase();
+    const qq = q.trim().toLowerCase();
     const allowed = staffId && props.staffServices[staffId]?.length ? new Set(props.staffServices[staffId]) : null;
     return props.services
       .filter((s) => !allowed || allowed.has(s.id))
       .filter((s) => !cat || s.category_id === cat)
-      .filter((s) => !t || s.name_tr.toLowerCase().includes(t) || s.name_en.toLowerCase().includes(t) || (s.code ?? "").includes(t))
+      .filter((s) => !qq || s.name_tr.toLowerCase().includes(qq) || s.name_en.toLowerCase().includes(qq) || (s.name_ru ?? "").toLowerCase().includes(qq) || (s.code ?? "").includes(qq))
       .slice(0, 60);
   }, [props.services, props.staffServices, staffId, q, cat]);
 
   const service = props.services.find((s) => s.id === serviceId);
 
   function submit() {
-    if (!service) return setErr("Bir hizmet seçin.");
-    if (!customer && !newCustomer?.first_name) return setErr("Müşteri seçin veya yeni müşteri girin.");
+    if (!service) return setErr(t("Bir hizmet seçin."));
+    if (!customer && !newCustomer?.first_name) return setErr(t("Müşteri seçin veya yeni müşteri girin."));
     setErr("");
     const input: NewItemInput = {
       date: props.date, startHHMM: time, staffId, serviceId: service.id,
@@ -268,16 +273,16 @@ function NewItemDialog(props: {
   }
 
   return (
-    <Modal onClose={props.onClose} title={props.draft.visitId ? "Ziyarete hizmet ekle" : "Yeni randevu"}>
+    <Modal onClose={props.onClose} title={props.draft.visitId ? t("Ziyarete hizmet ekle") : t("Yeni randevu")}>
       <div className="grid gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <label className="f">Saat
+          <label className="f">{t("Saat")}
             <span className="inp"><input type="time" step={props.slotMinutes * 60} value={time} onChange={(e) => setTime(e.target.value)} /></span>
           </label>
-          <label className="f">Personel
+          <label className="f">{t("Personel")}
             <span className="inp">
               <select value={staffId ?? ""} onChange={(e) => setStaffId(e.target.value || null)}>
-                <option value="">Atanmamış</option>
+                <option value="">{t("Atanmamış")}</option>
                 {props.staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
               </select>
             </span>
@@ -286,19 +291,19 @@ function NewItemDialog(props: {
 
         {!props.draft.visitId && (
           <div className="grid gap-2">
-            <div className="eyebrow">Müşteri</div>
+            <div className="eyebrow">{t("Müşteri")}</div>
             <CustomerPicker value={customer} onChange={setCustomer} onNew={setNewCustomer} />
           </div>
         )}
 
         <div className="grid gap-2">
-          <div className="eyebrow">Hizmet</div>
+          <div className="eyebrow">{t("Hizmet")}</div>
           <div className="grid grid-cols-[1fr_auto] gap-2">
-            <span className="inp"><input placeholder="Hizmet adı veya kod ara…" value={q} onChange={(e) => setQ(e.target.value)} /></span>
+            <span className="inp"><input placeholder={t("Hizmet adı veya kod ara…")} value={q} onChange={(e) => setQ(e.target.value)} /></span>
             <span className="inp">
               <select value={cat} onChange={(e) => setCat(e.target.value)}>
-                <option value="">Tüm kategoriler</option>
-                {props.categories.map((c) => <option key={c.id} value={c.id}>{c.name_tr}</option>)}
+                <option value="">{t("Tüm kategoriler")}</option>
+                {props.categories.map((c) => <option key={c.id} value={c.id}>{localName(c, lang)}</option>)}
               </select>
             </span>
           </div>
@@ -310,27 +315,27 @@ function NewItemDialog(props: {
                 onClick={() => { setServiceId(s.id); setPrice(""); }}
                 className={`w-full text-left px-3 py-2 grid grid-cols-[1fr_auto] gap-2 items-center ${serviceId === s.id ? "bg-green-soft" : "hover:bg-sunk"}`}
               >
-                <span className="min-w-0"><span className="font-semibold text-sm block truncate">{s.name_tr}</span><span className="text-[11px] text-muted">{s.code ? `#${s.code} · ` : ""}{duration(s.duration_min)}</span></span>
+                <span className="min-w-0"><span className="font-semibold text-sm block truncate">{localName(s, lang)}</span><span className="text-[11px] text-muted">{s.code ? `#${s.code} · ` : ""}{duration(s.duration_min, lang)}</span></span>
                 <span className="num text-sm font-bold">{money(s.price)}</span>
               </button>
             ))}
-            {!filtered.length && <div className="px-3 py-4 text-sm text-muted">Sonuç yok.</div>}
+            {!filtered.length && <div className="px-3 py-4 text-sm text-muted">{t("Sonuç yok.")}</div>}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <label className="f">Fiyat (boş = liste fiyatı{service ? ` ${money(service.price)}` : ""})
+          <label className="f">{service ? t("Fiyat (boş = liste fiyatı {price})", { price: money(service.price) }) : t("Fiyat (boş = liste fiyatı)")}
             <span className="inp"><input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={service ? String(service.price) : ""} /></span>
           </label>
-          <label className="f">Not
-            <span className="inp"><input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="ör. 3. seans" /></span>
+          <label className="f">{t("Not")}
+            <span className="inp"><input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("ör. 3. seans")} /></span>
           </label>
         </div>
 
         {err && <p className="pill bad">{err}</p>}
         <div className="flex gap-2 justify-end">
-          <button className="btn ghost" onClick={props.onClose} type="button">Vazgeç</button>
-          <button className="btn" onClick={submit} disabled={pending} type="button">{pending ? "Kaydediliyor…" : "Kaydet"}</button>
+          <button className="btn ghost" onClick={props.onClose} type="button">{t("Vazgeç")}</button>
+          <button className="btn" onClick={submit} disabled={pending} type="button">{pending ? t("Kaydediliyor…") : t("Kaydet")}</button>
         </div>
       </div>
     </Modal>
@@ -338,12 +343,13 @@ function NewItemDialog(props: {
 }
 
 export function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  const t = useT();
   return (
     <div className="fixed inset-0 z-40 bg-black/40 grid place-items-end sm:place-items-center p-0 sm:p-4" onClick={onClose} role="dialog" aria-modal aria-label={title}>
       <div className="bg-surface w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-card p-5 grid gap-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-bold">{title}</h2>
-          <button className="btn ghost sm" onClick={onClose} aria-label="Kapat">✕</button>
+          <button className="btn ghost sm" onClick={onClose} aria-label={t("Kapat")}>✕</button>
         </div>
         {children}
       </div>

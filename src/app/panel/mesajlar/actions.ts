@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireManager, requireOps } from "@/lib/auth";
+import { getT } from "@/lib/i18n/server";
 
 export async function markSent(input: { customerId: string | null; visitId: string | null; kind: string; body: string }) {
   const { supabase, user } = await requireOps();
@@ -23,14 +24,15 @@ export async function saveTemplates(fd: FormData) {
 export async function personalize(input: { customerId: string | null; kind: string; locale: string; draft: string }) {
   const { supabase } = await requireOps();
   const { complete } = await import("@/lib/ai");
-  if (!input.customerId) return { ok: false as const, error: "Müşteri yok." };
+  const t = await getT();
+  if (!input.customerId) return { ok: false as const, error: t("Müşteri yok.") };
   const [{ data: c }, { data: visits }, { data: pk }, { data: st }] = await Promise.all([
     supabase.from("customers").select("first_name, last_name, gender, notes, balance, loyalty_points").eq("id", input.customerId).single(),
     supabase.from("visits").select("visit_date, status, items:visit_items(service_name, staff:staff(full_name))").eq("customer_id", input.customerId).order("visit_date", { ascending: false }).limit(6),
     supabase.from("customer_packages").select("name, total_sessions, used_sessions, expires_at").eq("customer_id", input.customerId).eq("is_active", true),
     supabase.from("settings").select("business_name, google_review_url").eq("id", 1).single(),
   ]);
-  if (!c) return { ok: false as const, error: "Müşteri bulunamadı." };
+  if (!c) return { ok: false as const, error: t("Müşteri bulunamadı.") };
   const lang = input.locale === "ru" ? "Russian" : input.locale === "tr" ? "Turkish" : "English";
   const hist = (visits ?? []).map((v) => `${v.visit_date} (${v.status}): ${v.items.map((i) => `${i.service_name}${i.staff?.full_name ? " / " + i.staff.full_name.split(" ")[1] : ""}`).join(", ")}`).join("\n") || "none";
   const pkgs = (pk ?? []).map((p) => `${p.name}: ${p.total_sessions - p.used_sessions} sessions left${p.expires_at ? `, expires ${p.expires_at}` : ""}`).join("\n") || "none";
