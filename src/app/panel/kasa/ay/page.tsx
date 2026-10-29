@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
-import { staffEarnings } from "@/lib/queries/kasa";
+import { computePayroll } from "@/lib/payroll";
 import { money, fmtDate, todayIso, fmtMonthYear } from "@/lib/format";
 import { getT, getLang } from "@/lib/i18n/server";
 import { PayoutForm } from "./payout-form";
@@ -30,7 +30,7 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
     supabase.from("expenses").select("expense_date, category, amount, method, staff_id").gte("expense_date", start).lte("expense_date", end),
     supabase.from("staff").select("*").eq("is_active", true).order("sort_order"),
     supabase.from("staff_payouts").select("*").gte("period_start", start).lte("period_end", end),
-    staffEarnings(supabase, start, end),
+    computePayroll(supabase, start, end),
     supabase.from("settings").select("kdv_rate").eq("id", 1).single(),
   ]);
 
@@ -47,11 +47,12 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
   const maxDay = Math.max(1, ...byDay.values());
 
   const staffRows = ((staff ?? []) as Staff[]).map((s) => {
-    const e = earn.get(s.id) ?? { service: 0, product: 0 };
-    const due = e.service * Number(s.pay_percent) / 100 + e.product * Number(s.product_percent) / 100;
+    const p = earn.get(s.id);
+    const e = { service: p?.serviceSales ?? 0, product: p?.productSales ?? 0 };
+    const due = p?.total ?? 0;
     const advances = (exps ?? []).filter((x) => x.staff_id === s.id && ["avans", "prim", "maaş"].includes(x.category)).reduce((a, x) => a + Number(x.amount), 0);
     const paid = (payouts ?? []).filter((p) => p.staff_id === s.id).reduce((a, p) => a + Number(p.amount), 0);
-    return { s, e, due, advances, paid, remaining: due - advances - paid };
+    return { s, e, p, due, advances, paid, remaining: due - advances - paid };
   });
   const totalDue = staffRows.reduce((a, r) => a + r.due, 0);
 
@@ -69,7 +70,7 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
         <Kpi label={t("Aylık ciro")} value={money(gross)} sub={t("{n} satış · net {net}", { n: (sales ?? []).length, net: money(net) })} accent />
         <Kpi label={t("Nakit / Kart")} value={`${money(byMethod.cash ?? 0)} / ${money(byMethod.card ?? 0)}`} sub={t("havale {amount}", { amount: money(byMethod.transfer ?? 0) })} />
         <Kpi label={t("Giderler")} value={money(expTotal)} sub={Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k, v]) => `${t(k)} ${money(v)}`).join(" · ") || "—"} />
-        <Kpi label={t("Personel hak edişi")} value={money(totalDue)} sub={t("hizmet+ürün yüzdesi")} />
+        <Kpi label={t("Personel hak edişi")} value={money(totalDue)} sub={t("maaş şemalarına göre")} />
         <Kpi label={t("Kalan (kaba)")} value={money(gross - expTotal - totalDue)} sub={t("ciro − gider − hak ediş")} />
       </div>
 
@@ -93,9 +94,9 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
           <table className="w-full text-sm min-w-[640px]">
             <thead className="text-[11px] uppercase tracking-wide text-muted bg-sunk"><tr><th className="text-left px-3 py-2">{t("Personel")}</th><th className="text-right px-3 py-2">{t("Hizmet cirosu")}</th><th className="text-right px-3 py-2">{t("Ürün")}</th><th className="text-right px-3 py-2">{t("Hak ediş")}</th><th className="text-right px-3 py-2">{t("Avans/prim")}</th><th className="text-right px-3 py-2">{t("Ödenen")}</th><th className="text-right px-3 py-2">{t("Kalan")}</th></tr></thead>
             <tbody className="divide-y divide-line">
-              {staffRows.map(({ s, e, due, advances, paid, remaining }) => (
+              {staffRows.map(({ s, e, p, due, advances, paid, remaining }) => (
                 <tr key={s.id}>
-                  <td className="px-3 py-2"><b>{s.full_name}</b><div className="text-[11px] text-muted">{t(s.pay_model === "daily_prim" ? "günlük prim" : s.pay_model === "percent" ? "ay sonu yüzde" : "sabit")} · %{s.pay_percent}{Number(s.product_percent) ? ` / ${t("ürün %{n}", { n: s.product_percent })}` : ""}</div></td>
+                  <td className="px-3 py-2"><b>{s.full_name}</b><div className="text-[11px] text-muted">{p?.scheme ? [p.own && `${t("kendi")} ${money(p.own)}`, p.company && `${t("şirket")} ${money(p.company)}`, p.booking && `${t("randevu primi")} ${money(p.booking)}`, p.fixed && `${t("günlük")} ${money(p.fixed)} (${t("{n} gün", { n: p.days })})`, p.guarantee && `${t("garanti farkı")} ${money(p.guarantee)}`].filter(Boolean).join(" · ") || t("maaş şeması") : `%${s.pay_percent}${Number(s.product_percent) ? ` / ${t("ürün %{n}", { n: s.product_percent })}` : ""}`}</div></td>
                   <td className="px-3 py-2 text-right num">{money(e.service)}</td>
                   <td className="px-3 py-2 text-right num">{money(e.product)}</td>
                   <td className="px-3 py-2 text-right num font-bold">{money(due)}</td>

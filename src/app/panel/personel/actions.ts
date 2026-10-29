@@ -109,3 +109,36 @@ export async function deleteTimeOff(id: string) {
   revalidatePath("/panel/personel"); revalidatePath("/panel/takvim");
   return { ok: true as const };
 }
+
+/* ---------------- maaş şemaları ---------------- */
+export type SchemeInput = {
+  id?: string | null; staffId: string; validFrom: string;
+  servicePercent: number; productPercent: number; serviceDeductDiscount: boolean; productDeductDiscount: boolean; serviceDeductMaterials: boolean;
+  companyServicePercent: number; companyProductPercent: number; companyDeductDiscount: boolean; companyExcludeOwn: boolean; companyOnlyOnShift: boolean;
+  bookingServicePercent: number; bookingProductPercent: number; bookingExcludeOwn: boolean;
+  dailyWage: number; dailyGuarantee: number; notes: string;
+};
+export async function savePayScheme(i: SchemeInput) {
+  const { supabase } = await requireManager();
+  const t = await getT();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(i.validFrom)) return { ok: false as const, error: t("Başlangıç tarihi geçersiz.") };
+  const pc = (n: number) => Math.max(0, Math.min(100, Number(n) || 0));
+  const row = {
+    staff_id: i.staffId, valid_from: i.validFrom,
+    service_percent: pc(i.servicePercent), product_percent: pc(i.productPercent), service_deduct_discount: !!i.serviceDeductDiscount, product_deduct_discount: !!i.productDeductDiscount, service_deduct_materials: !!i.serviceDeductMaterials,
+    company_service_percent: pc(i.companyServicePercent), company_product_percent: pc(i.companyProductPercent), company_deduct_discount: !!i.companyDeductDiscount, company_exclude_own: !!i.companyExcludeOwn, company_only_on_shift: !!i.companyOnlyOnShift,
+    booking_service_percent: pc(i.bookingServicePercent), booking_product_percent: pc(i.bookingProductPercent), booking_exclude_own: !!i.bookingExcludeOwn,
+    daily_wage: Math.max(0, Number(i.dailyWage) || 0), daily_guarantee: Math.max(0, Number(i.dailyGuarantee) || 0), notes: String(i.notes ?? "").slice(0, 300),
+  };
+  const { error } = i.id ? await supabase.from("staff_pay_schemes").update(row).eq("id", i.id) : await supabase.from("staff_pay_schemes").insert(row);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/panel/personel"); revalidatePath("/panel/kasa");
+  return { ok: true as const };
+}
+export async function deletePayScheme(id: string) {
+  const { supabase } = await requireManager();
+  const { error } = await supabase.from("staff_pay_schemes").delete().eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/panel/personel"); revalidatePath("/panel/kasa");
+  return { ok: true as const };
+}

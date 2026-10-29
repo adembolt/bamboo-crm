@@ -12,7 +12,7 @@ const CATS = ["malzeme", "kira", "fatura", "maaş", "avans", "prim", "pazarlama"
 
 type Expense = { id: string; category: string; description: string; amount: number; method: PayMethod; staff_id: string | null; staff_name: string | null };
 
-export function KasaDay(props: { date: string; visits: DayVisit[]; otherSales: OtherSale[]; expenses: Expense[]; staff: Staff[]; earnings: Record<string, { service: number; product: number }>; canWrite: boolean; isManager: boolean }) {
+export function KasaDay(props: { date: string; visits: DayVisit[]; otherSales: OtherSale[]; expenses: Expense[]; staff: Staff[]; earnings: Record<string, { sales: number; pay: number; detail: string }>; canWrite: boolean; isManager: boolean }) {
   const { visits, staff, canWrite } = props;
   const t = useT();
   const router = useRouter();
@@ -71,13 +71,13 @@ export function KasaDay(props: { date: string; visits: DayVisit[]; otherSales: O
           <h2 className="text-lg font-bold">{t("Personel hak edişi (gün)")}</h2>
           <div className="grid gap-1">
             {staff.map((s) => {
-              const e = props.earnings[s.id] ?? { service: 0, product: 0 };
-              const pay = e.service * Number(s.pay_percent) / 100 + e.product * Number(s.product_percent) / 100;
-              if (!e.service && !e.product) return null;
+              const e = props.earnings[s.id];
+              if (!e) return null;
+              const pay = e.pay;
               return (
                 <div key={s.id} className="grid grid-cols-[1fr_auto_auto] gap-3 items-center text-sm py-1 border-b border-dashed border-line last:border-0">
-                  <span className="min-w-0"><b className="block truncate">{s.full_name}</b><span className="text-[11px] text-muted">{t(s.pay_model === "daily_prim" ? "günlük prim" : s.pay_model === "percent" ? "ay sonu" : "sabit")} · %{s.pay_percent}</span></span>
-                  <span className="num text-muted">{money(e.service + e.product)}</span>
+                  <span className="min-w-0"><b className="block truncate">{s.full_name}</b><span className="text-[11px] text-muted">{e.detail || "—"}</span></span>
+                  <span className="num text-muted">{money(e.sales)}</span>
                   <span className="num font-bold">{money(pay)}</span>
                 </div>
               );

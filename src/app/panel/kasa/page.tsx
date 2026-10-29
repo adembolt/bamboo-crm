@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
-import { loadKasaDay, summarize, staffEarnings } from "@/lib/queries/kasa";
+import { loadKasaDay, summarize } from "@/lib/queries/kasa";
+import { computePayroll } from "@/lib/payroll";
 import { todayIso, addDays, fmtDateLong, money } from "@/lib/format";
 import { KasaDay } from "./kasa-day";
 import { getT, getLang } from "@/lib/i18n/server";
@@ -13,7 +14,7 @@ export default async function KasaPage({ searchParams }: PageProps<"/panel/kasa"
   const { supabase, profile } = await requireSession();
   const canWrite = !!profile && ["owner", "manager", "reception"].includes(profile.role);
   const isManager = !!profile && ["owner", "manager"].includes(profile.role);
-  const [day, earn] = await Promise.all([loadKasaDay(supabase, d), staffEarnings(supabase, d, d)]);
+  const [day, earn] = await Promise.all([loadKasaDay(supabase, d), computePayroll(supabase, d, d)]);
   const [t, lang] = [await getT(), await getLang()];
   const sum = summarize(day.visits, day.expenses, Number(day.settings.kdv_rate), day.otherSales);
 
@@ -43,7 +44,7 @@ export default async function KasaPage({ searchParams }: PageProps<"/panel/kasa"
         otherSales={day.otherSales}
         expenses={day.expenses.map((e) => ({ ...e, staff_name: e.staff?.full_name ?? null }))}
         staff={day.staff}
-        earnings={Object.fromEntries([...earn.entries()])}
+        earnings={Object.fromEntries([...earn.entries()].filter(([, e]) => e.total > 0 || e.serviceSales + e.productSales > 0).map(([id, e]) => [id, { sales: e.serviceSales + e.productSales, pay: e.total, detail: [e.own && `${t("kendi")} ${money(e.own)}`, e.company && `${t("şirket")} ${money(e.company)}`, e.booking && `${t("randevu primi")} ${money(e.booking)}`, e.fixed && `${t("günlük")} ${money(e.fixed)}`, e.guarantee && `${t("garanti farkı")} ${money(e.guarantee)}`].filter(Boolean).join(" · ") }]))}
         canWrite={canWrite}
         isManager={isManager}
       />
