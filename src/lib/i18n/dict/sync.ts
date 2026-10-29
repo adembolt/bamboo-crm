@@ -140,5 +140,17 @@ const d: Record<string, [string, string]> = {
   "Kapasite": ["Capacity", "Вместимость"],
   "kısmen": ["partly", "частично"],
   "ör. Masaj kabini": ["e.g. Massage cabin", "напр. Массажный кабинет"],
+  "Bu gün ve sonraki 3 haftanın aynı günü": ["This day and the same weekday for the next 3 weeks", "Этот день и тот же день недели ещё 3 недели"],
+  "Bu haftanın tüm günleri": ["All days of this week", "Все дни этой недели"],
+  "Erken başla": ["Start earlier", "Начать раньше"],
+  "Erken bitir": ["Finish earlier", "Закончить раньше"],
+  "Geç başla": ["Start later", "Начать позже"],
+  "O gün çalışmıyor": ["Not working that day", "В этот день не работает"],
+  "Sadece bu gün": ["Only this day", "Только этот день"],
+  "Uzat": ["Extend", "Продлить"],
+  "{n} randevu bu saatlerin dışında kalıyor.": ["{n} appointments fall outside these hours.", "{n} записей выходят за эти часы."],
+  "Çalışma saati": ["Working hours", "Рабочие часы"],
+  "Çalışma saatini değiştir": ["Change working hours", "Изменить рабочие часы"],
+  "Uygula": ["Apply to", "Применить к"],
 };
 export default d;

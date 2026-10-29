@@ -14,6 +14,7 @@ import { CloseDialog } from "@/app/panel/kasa/close-dialog";
 import { StaffAvatar } from "@/components/staff-avatar";
 import { useT, useLang } from "@/lib/i18n/client";
 import { localName, staffTitle } from "@/lib/i18n/core";
+import { DayHoursEditor, type DayHoursTarget } from "./day-hours-editor";
 import { weekdayOf, workWindows, offBlocks, offHours, isWorking, type SchedRow, type DayHourRow } from "@/lib/schedule";
 
 type ServiceLite = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en: string; name_ru?: string | null; duration_min: number; buffer_min: number; price: number; kind: string };
@@ -63,6 +64,21 @@ export function DayCalendar(props: {
     return { w, o, grey: offHours(w, openMin, closeMin), working: w.length > 0 && !fullOff, fullOff };
   };
   const hoursOf = { get: (staffId: string) => hoursFor(staffId, date) };
+  const [hoursEdit, setHoursEdit] = useState<DayHoursTarget | null>(null);
+  /** Başlıktaki çalışma saati satırı: yönetici tıklayınca küçük düzenleme penceresi açılır */
+  const hoursLine = (staffId: string, d: string, its: { starts_at: string; ends_at: string; status: string }[]) => {
+    const h = hoursFor(staffId, d);
+    const txt = h.fullOff ? t("İzinli") : !h.w.length ? t("Çalışmıyor") : h.w.map(([a, b]) => `${hhmm(a)}–${hhmm(b)}`).join(", ");
+    const cls = `text-[10px] num truncate ${h.working ? "text-muted" : "text-warn font-semibold"}`;
+    if (!props.canManage) return <div className={cls}>{txt}</div>;
+    return (
+      <button type="button" className={`${cls} w-full rounded hover:bg-sunk hover:text-ink underline decoration-dotted underline-offset-2`} title={t("Çalışma saatini değiştir")}
+        onClick={(e) => setHoursEdit({ staffId, staffName: staff.find((x) => x.id === staffId)?.full_name ?? "", date: d, windows: h.w, x: e.clientX, y: e.clientY,
+          items: its.filter((i) => i.status !== "cancelled" && i.status !== "no_show").map((i) => ({ start: minutesOfDay(i.starts_at), end: minutesOfDay(i.ends_at) })) })}>
+        {txt} ✎
+      </button>
+    );
+  };
   const workCheck = (staffId: string | null, startMin: number, dur: number, d: string = date) => {
     if (!staffId) return true; const h = hoursFor(staffId, d); return isWorking(startMin, startMin + dur, h.w, h.o);
   };
@@ -251,7 +267,7 @@ export function DayCalendar(props: {
                 <span className="text-[11px] text-muted font-semibold">{fmtWeekdayShort(c.date, lang)}</span>
                 <span className={`text-lg font-bold num ${c.date === now?.date ? "text-green" : ""}`}>{Number(c.date.slice(8))}</span>
               </button>
-              {c.staffId && (() => { const h = hoursFor(c.staffId, c.date); const txt = h.fullOff ? t("İzinli") : !h.w.length ? t("Çalışmıyor") : h.w.map(([a, b]) => `${hhmm(a)}–${hhmm(b)}`).join(", "); return <div className={`text-[10px] num truncate ${h.working ? "text-muted" : "text-warn font-semibold"}`}>{txt}</div>; })()}
+              {c.staffId && hoursLine(c.staffId, c.date, c.items)}
               <div className="text-[10px] text-muted">{c.items.length ? t("{n} randevu", { n: c.items.length }) : "—"}</div>
             </div>
           ) : (
@@ -261,7 +277,7 @@ export function DayCalendar(props: {
                 <div className="min-w-0 w-full leading-tight">
                   <div className="font-semibold truncate text-[13px]">{c.name}</div>
                   <div className="text-[10px] text-muted truncate">{c.title || t("{n} randevu", { n: c.items.length })}</div>
-                  {c.staffId && (() => { const h = hoursOf.get(c.staffId); if (!h) return null; const txt = h.fullOff ? t("İzinli") : !h.w.length ? t("Çalışmıyor") : h.w.map(([a, b]) => `${hhmm(a)}–${hhmm(b)}`).join(", "); return <div className={`text-[10px] num truncate ${h.working ? "text-muted" : "text-warn font-semibold"}`}>{txt}</div>; })()}
+                  {c.staffId && hoursLine(c.staffId, c.date, c.items)}
                 </div>
               </div>
             </div>
@@ -422,6 +438,8 @@ export function DayCalendar(props: {
           </div>
         </Modal>
       )}
+
+      {hoursEdit && <DayHoursEditor key={`${hoursEdit.staffId}${hoursEdit.date}`} target={hoursEdit} onClose={() => setHoursEdit(null)} />}
 
       {draft && (
         <NewItemDialog
