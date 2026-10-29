@@ -99,5 +99,14 @@ const d: Record<string, [string, string]> = {
   "Hizmetlerde geçerli": ["Valid for services", "Действует на услуги"],
   "Ürünlerde geçerli": ["Valid for products", "Действует на товары"],
   "Hizmet ve ürünlerde geçerli": ["Valid for services and products", "Действует на услуги и товары"],
+  "{n} hafta sonra": ["in {n} weeks", "через {n} нед."],
+  "{n} hafta önce": ["{n} weeks ago", "{n} нед. назад"],
+  "{n} gün sonra": ["in {n} days", "через {n} дн."],
+  "{n} gün önce": ["{n} days ago", "{n} дн. назад"],
+  "Yarın": ["Tomorrow", "Завтра"],
+  "Dün": ["Yesterday", "Вчера"],
+  "Bugüne göre": ["Relative to today", "Относительно сегодня"],
+  "Bugüne dön (kısayol: T)": ["Back to today (shortcut: T)", "Вернуться к сегодня (клавиша T)"],
+  "Bugüne dön": ["Back to today", "К сегодня"],
 };
 export default d;

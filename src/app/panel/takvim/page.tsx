@@ -3,11 +3,13 @@ import { requireSession } from "@/lib/auth";
 import { loadDay, loadServicesForPicker } from "@/lib/queries/calendar";
 import { todayIso, addDays, fmtDateLong, fmtDate } from "@/lib/format";
 import { DayCalendar } from "./day-calendar";
+import { TodayButton } from "./today-button";
 import { CalendarShell } from "./calendar-shell";
 import { AppointmentSearch } from "./appointment-search";
 import { MiniCalendar, KasaSnapshot } from "./side-panel";
 import { loadKasaDay, summarize } from "@/lib/queries/kasa";
 import { getT, getLang } from "@/lib/i18n/server";
+import { weekdayOf } from "@/lib/schedule";
 
 export async function generateMetadata() {
   const t = await getT();
@@ -53,7 +55,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
         <Link className="btn ghost sm" href={q(addDays(d, -step))} aria-label={isWeek ? t("Önceki hafta") : t("Önceki gün")}>‹</Link>
         <h1 className="text-xl font-bold num">{title}</h1>
         <Link className="btn ghost sm" href={q(addDays(d, step))} aria-label={isWeek ? t("Sonraki hafta") : t("Sonraki gün")}>›</Link>
-        {(isWeek ? !weekDates.includes(todayIso()) : d !== todayIso()) && <Link className="btn ghost sm" href={q(todayIso())}>{t("Bugün")}</Link>}
+        {(isWeek ? !weekDates.includes(todayIso()) : d !== todayIso()) && <TodayButton href={q(todayIso())} isWeek={isWeek} diffDays={Math.round((new Date(`${isWeek ? weekDates[0] : d}T12:00:00Z`).getTime() - new Date(`${isWeek ? addDays(todayIso(), 1 - weekdayOf(todayIso())) : todayIso()}T12:00:00Z`).getTime()) / 86400000)} />}
         <div className="flex gap-1 bg-sunk p-1 rounded-lg" role="tablist" aria-label={t("Görünüm")}>
           <Link role="tab" aria-selected={!isWeek} href={`/panel/takvim?d=${d}`} className={`px-3 py-1 rounded-md text-sm font-semibold ${!isWeek ? "bg-surface shadow-card" : "text-muted"}`}>{t("Gün")}</Link>
           <Link role="tab" aria-selected={isWeek} href={`/panel/takvim?d=${d}&v=week${weekStaffId ? `&s=${weekStaffId}` : ""}`} className={`px-3 py-1 rounded-md text-sm font-semibold ${isWeek ? "bg-surface shadow-card" : "text-muted"}`}>{t("Hafta")}</Link>
