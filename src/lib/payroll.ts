@@ -19,7 +19,7 @@ export async function computePayroll(supabase: SupabaseClient<Database>, from: s
   const [{ data: staff }, { data: schemes }, itemsRes, { data: settings }, { data: sched }, { data: dayRows }, { data: offs }] = await Promise.all([
     supabase.from("staff").select("id, pay_percent, product_percent, schedule_mode, is_active"),
     supabase.from("staff_pay_schemes").select("*").order("valid_from", { ascending: false }),
-    supabase.from("sale_items").select("staff_id, kind, qty, unit_price, total, material_cost, visit_item:visit_items(booked_by_staff_id), sale:sales!inner(sale_date, visit_id)").gte("sale.sale_date", from).lte("sale.sale_date", to).limit(20000),
+    supabase.from("sale_items").select("staff_id, kind, qty, unit_price, total, material_cost, visit_item:visit_items(booked_by_staff_id), sale:sales!inner(sale_date, visit_id, visit:visits(items:visit_items(booked_by_staff_id)))").gte("sale.sale_date", from).lte("sale.sale_date", to).limit(20000),
     supabase.from("settings").select("open_time, close_time").eq("id", 1).single(),
     supabase.from("staff_schedules").select("staff_id, weekday, start_time, end_time"),
     supabase.from("staff_day_hours").select("staff_id, day, start_time, end_time").gte("day", from).lte("day", to),
@@ -27,9 +27,10 @@ export async function computePayroll(supabase: SupabaseClient<Database>, from: s
   ]);
 
   // Randevuyu oluşturan: DIKIDI'den gelen kalemde booked_by_staff_id; CRM'de ziyareti açan kullanıcının personel kaydı
-  type Raw = { staff_id: string | null; kind: string; qty: number; unit_price: number; total: number; material_cost: number; visit_item: { booked_by_staff_id: string | null } | null; sale: { sale_date: string; visit_id: string | null } };
+  type Raw = { staff_id: string | null; kind: string; qty: number; unit_price: number; total: number; material_cost: number; visit_item: { booked_by_staff_id: string | null } | null; sale: { sale_date: string; visit_id: string | null; visit: { items: { booked_by_staff_id: string | null }[] } | null } };
   const raw = (itemsRes.data ?? []) as unknown as Raw[];
-  const visitIds = [...new Set(raw.filter((r) => !r.visit_item?.booked_by_staff_id && r.sale.visit_id).map((r) => r.sale.visit_id!))];
+  const visitAuthor = (r: Raw) => r.visit_item?.booked_by_staff_id ?? r.sale.visit?.items?.find((i) => i.booked_by_staff_id)?.booked_by_staff_id ?? null;
+  const visitIds = [...new Set(raw.filter((r) => !visitAuthor(r) && r.sale.visit_id).map((r) => r.sale.visit_id!))];
   const creatorStaff = new Map<string, string>();
   if (visitIds.length) {
     const { data: vs } = await supabase.from("visits").select("id, created_by").in("id", visitIds.slice(0, 2000));
@@ -40,7 +41,7 @@ export async function computePayroll(supabase: SupabaseClient<Database>, from: s
   }
   const items: Item[] = raw.map((r) => ({
     staff_id: r.staff_id, kind: r.kind, qty: Number(r.qty), unit_price: Number(r.unit_price), total: Number(r.total), material_cost: Number(r.material_cost ?? 0),
-    sale_date: r.sale.sale_date, author: r.visit_item?.booked_by_staff_id ?? (r.sale.visit_id ? creatorStaff.get(r.sale.visit_id) ?? null : null),
+    sale_date: r.sale.sale_date, author: visitAuthor(r) ?? (r.sale.visit_id ? creatorStaff.get(r.sale.visit_id) ?? null : null),
   })).filter((i) => i.kind === "service" || i.kind === "product" || i.kind === "package");
 
   const open = toMin(String(settings?.open_time ?? "10:00").slice(0, 5)), close = toMin(String(settings?.close_time ?? "21:00").slice(0, 5));

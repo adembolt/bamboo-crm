@@ -34,16 +34,18 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
     supabase.from("settings").select("kdv_rate").eq("id", 1).single(),
   ]);
 
-  const gross = (sales ?? []).reduce((s, x) => s + Number(x.total), 0);
+  // Ciro = gerçek tahsilat (hediye çeki / puan / bakiye ile ödenen kısım, yüklendiği gün zaten sayıldı)
+  const NOT_MONEY = ["gift_card", "points", "balance"];
   const byMethod: Record<string, number> = {};
   for (const p of pays ?? []) byMethod[p.method] = (byMethod[p.method] ?? 0) + Number(p.amount);
+  const gross = (pays ?? []).filter((p) => !NOT_MONEY.includes(p.method)).reduce((s, p) => s + Number(p.amount), 0);
   const expTotal = (exps ?? []).reduce((s, e) => s + Number(e.amount), 0);
   const byCat: Record<string, number> = {};
   for (const e of exps ?? []) byCat[e.category] = (byCat[e.category] ?? 0) + Number(e.amount);
   const kdv = Number(settings?.kdv_rate ?? 0.2);
   const net = gross / (1 + kdv);
   const byDay = new Map<string, number>();
-  for (const s of sales ?? []) byDay.set(s.sale_date, (byDay.get(s.sale_date) ?? 0) + Number(s.total));
+  for (const p of (pays ?? []) as unknown as { method: string; amount: number; sale: { sale_date: string } }[]) if (!NOT_MONEY.includes(p.method)) byDay.set(p.sale.sale_date, (byDay.get(p.sale.sale_date) ?? 0) + Number(p.amount));
   const maxDay = Math.max(1, ...byDay.values());
 
   const staffRows = ((staff ?? []) as Staff[]).map((s) => {
