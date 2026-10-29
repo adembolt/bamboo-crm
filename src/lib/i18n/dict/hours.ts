@@ -64,5 +64,9 @@ const d: Record<string, [string, string]> = {
   "Gelmeme sayısı: {n}": ["No-shows: {n}", "Неявок: {n}"],
   "Ödendi": ["Paid", "Оплачено"],
   "Online randevu": ["Online booking", "Онлайн-запись"],
+  "Gün görünümüne geç": ["Switch to day view", "Перейти к дню"],
+  "Önceki hafta": ["Previous week", "Предыдущая неделя"],
+  "Sonraki hafta": ["Next week", "Следующая неделя"],
+  "Görünüm": ["View", "Вид"],
 };
 export default d;

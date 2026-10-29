@@ -26,9 +26,10 @@ export type DayItem = {
   };
 };
 
-export async function loadDay(supabase: SupabaseClient<Database>, isoDate: string) {
+/** Bir gün (veya toDate verilirse tarih aralığı) için takvim verisi */
+export async function loadDay(supabase: SupabaseClient<Database>, isoDate: string, toDate: string = isoDate) {
   const dayStart = new Date(`${isoDate}T00:00:00+03:00`).toISOString();
-  const dayEnd = new Date(`${isoDate}T23:59:59+03:00`).toISOString();
+  const dayEnd = new Date(`${toDate}T23:59:59+03:00`).toISOString();
 
   const [staffRes, itemsRes, settingsRes, timeOffRes, schedRes] = await Promise.all([
     supabase.from("staff").select("*").eq("is_active", true).order("sort_order").order("full_name"),
