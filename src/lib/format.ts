@@ -18,8 +18,10 @@ export function fmtTime(iso: string | Date) {
 
 const LOC: Record<string, string> = { tr: "tr-TR", en: "en-GB", ru: "ru-RU" };
 
+const cap = (s: string) => s.charAt(0).toLocaleUpperCase() + s.slice(1);
+
 export function fmtDateLong(isoDate: string, lang = "tr") {
-  return new Intl.DateTimeFormat(LOC[lang] ?? "tr-TR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: TZ }).format(new Date(isoDate + "T12:00:00"));
+  return cap(new Intl.DateTimeFormat(LOC[lang] ?? "tr-TR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: TZ }).format(new Date(isoDate + "T12:00:00")));
 }
 
 /** YYYY-MM-DD (İstanbul'a göre bugün) */
@@ -54,7 +56,7 @@ export function hhmm(minutes: number) {
 
 /** "Ekim 2026" / "October 2026" / "октябрь 2026" */
 export function fmtMonthYear(isoDate: string, lang = "tr") {
-  return new Intl.DateTimeFormat(LOC[lang] ?? "tr-TR", { month: "long", year: "numeric", timeZone: TZ }).format(new Date(isoDate.slice(0, 10) + "T12:00:00"));
+  return cap(new Intl.DateTimeFormat(LOC[lang] ?? "tr-TR", { month: "long", year: "numeric", timeZone: TZ }).format(new Date(isoDate.slice(0, 10) + "T12:00:00")));
 }
 
 /** Kısa gün adı: Pzt / Mon / пн */

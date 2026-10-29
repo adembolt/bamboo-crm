@@ -76,7 +76,7 @@ export default async function ReportPage({ searchParams }: PageProps<"/panel/kas
           {(["day", "week", "month", "custom"] as Period[]).map((pp) => <Link key={pp} href={q(pp)} className={`px-3 py-1 rounded-md text-sm font-semibold ${pp === p ? "bg-surface shadow-card" : "text-muted"}`}>{t({ day: "Gün", week: "Hafta", month: "Ay", custom: "Aralık" }[pp])}</Link>)}
         </nav>
         {p !== "custom" ? (
-          <span className="flex items-center gap-1"><Link className="btn ghost sm" href={shift(-1)}>‹</Link><b className="capitalize min-w-[140px] text-center">{title}</b><Link className="btn ghost sm" href={shift(1)}>›</Link></span>
+          <span className="flex items-center gap-1"><Link className="btn ghost sm" href={shift(-1)}>‹</Link><b className="min-w-[140px] text-center">{title}</b><Link className="btn ghost sm" href={shift(1)}>›</Link></span>
         ) : (
           <form className="flex items-center gap-2" action="/panel/kasa/rapor"><input type="hidden" name="p" value="custom" /><span className="inp"><input type="date" name="from" defaultValue={start} /></span><span className="text-muted">–</span><span className="inp"><input type="date" name="to" defaultValue={end} /></span><button className="btn ghost sm">{t("Göster")}</button></form>
         )}

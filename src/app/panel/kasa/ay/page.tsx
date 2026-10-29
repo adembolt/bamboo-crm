@@ -59,7 +59,7 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
     <div className="grid gap-4">
       <header className="flex items-center gap-3 flex-wrap">
         <Link className="btn ghost sm" href={`/panel/kasa/ay?m=${shiftMonth(m, -1)}`}>‹</Link>
-        <h1 className="text-xl font-bold capitalize">{fmtMonthYear(start, lang)}</h1>
+        <h1 className="text-xl font-bold">{fmtMonthYear(start, lang)}</h1>
         <Link className="btn ghost sm" href={`/panel/kasa/ay?m=${shiftMonth(m, 1)}`}>›</Link>
         <Link className="btn ghost sm ml-auto" href={`/panel/kasa/rapor?p=month&from=${start}`}>{t("Grafikler")}</Link>
         <Link className="btn ghost sm" href="/panel/kasa">{t("← Günlük kasa")}</Link>

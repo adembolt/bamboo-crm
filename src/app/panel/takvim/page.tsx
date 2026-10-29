@@ -34,7 +34,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
     <div className="grid gap-4">
       <header className="flex items-center gap-3 flex-wrap">
         <Link className="btn ghost sm" href={`/panel/takvim?d=${addDays(d, -1)}`} aria-label={t("Önceki gün")}>‹</Link>
-        <h1 className="text-xl font-bold capitalize">{fmtDateLong(d, lang)}</h1>
+        <h1 className="text-xl font-bold">{fmtDateLong(d, lang)}</h1>
         <Link className="btn ghost sm" href={`/panel/takvim?d=${addDays(d, 1)}`} aria-label={t("Sonraki gün")}>›</Link>
         {d !== todayIso() && <Link className="btn ghost sm" href="/panel/takvim">{t("Bugün")}</Link>}
         <form className="ml-auto" action="/panel/takvim">

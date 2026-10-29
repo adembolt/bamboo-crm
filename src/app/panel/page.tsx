@@ -28,7 +28,7 @@ export default async function TodayPage() {
     <div className="grid gap-4">
       <header>
         <p className="eyebrow">{profile?.full_name ? t("Hoş geldin, {name}", { name: profile.full_name.split(" ")[0] }) : t("Hoş geldin")}</p>
-        <h1 className="text-2xl font-bold capitalize">{fmtDateLong(d, lang)}</h1>
+        <h1 className="text-2xl font-bold">{fmtDateLong(d, lang)}</h1>
       </header>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Kpi label={t("Bugünkü ziyaret")} value={String(visits.size)} sub={t("{n} hizmet kalemi", { n: active.length })} />

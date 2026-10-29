@@ -23,7 +23,7 @@ export async function MiniCalendar({ date, busyDays }: { date: string; busyDays:
     <section className="panel grid gap-2">
       <div className="flex items-center justify-between">
         <Link className="btn ghost sm" href={`/panel/takvim?d=${prev}`} aria-label={t("Önceki ay")}>‹</Link>
-        <b className="capitalize">{fmtMonthYear(date, lang)}</b>
+        <b>{fmtMonthYear(date, lang)}</b>
         <Link className="btn ghost sm" href={`/panel/takvim?d=${next}`} aria-label={t("Sonraki ay")}>›</Link>
       </div>
       <div className="grid grid-cols-7 text-center text-[11px] text-muted font-semibold">{WD.map((w, i) => <span key={w} className={i >= 5 ? "text-bad" : ""}>{w}</span>)}</div>
