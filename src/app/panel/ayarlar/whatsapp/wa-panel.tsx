@@ -113,13 +113,13 @@ export function WaPanel({ initial }: { initial: WaStatus }) {
         {msg && <p className={`pill ${msg.ok ? "good" : "bad"} justify-self-start`}>{msg.text}</p>}
       </section>
 
-      <section className="panel grid gap-3">
-        <div>
-          <h2 className="font-bold">{t("Salon bilgisayarına kurulum")}</h2>
-          <p className="text-xs text-muted">{t("Program salondaki Mac'te arka planda çalışır, bilgisayar açılınca kendiliğinden başlar. Kurulum bir kez yapılır.")}</p>
-        </div>
+      <details className="panel grid gap-3" open={!s.hasToken}>
+        <summary className="cursor-pointer">
+          <b>{t("Salon bilgisayarına kurulum")}</b>
+          <span className="block text-xs text-muted">{s.hasToken ? t("Program kurulu ({host}). Başka bir bilgisayara taşımak gerekirse buradan yeniden kurulur.", { host: s.host ?? "Mac" }) : t("Program salondaki Mac'te arka planda çalışır, bilgisayar açılınca kendiliğinden başlar. Kurulum bir kez yapılır.")}</span>
+        </summary>
         {s.tokenCreatedAt && !code && <p className="text-xs text-muted">{t("Mevcut kod oluşturulma: {d}", { d: new Date(s.tokenCreatedAt).toLocaleString() })}</p>}
-        <button className="btn sm justify-self-start" disabled={pending} onClick={newCode}>{t("Kurulum kodu oluştur")}</button>
+        <button className="btn sm justify-self-start mt-3" disabled={pending} onClick={newCode}>{t("Kurulum kodu oluştur")}</button>
         {code && (
           <div className="grid gap-3">
             <p className="pill warn justify-self-start">{t("Bu kod sadece bir kez gösterilir. Kurulum bitene kadar bu sayfayı kapatmayın.")}</p>
@@ -137,7 +137,7 @@ export function WaPanel({ initial }: { initial: WaStatus }) {
             </ol>
           </div>
         )}
-      </section>
+      </details>
 
       <section className="panel grid gap-1 border-l-4" style={{ borderLeftColor: "var(--warn)" }}>
         <b className="text-sm">{t("Gönderim kapalı")}</b>

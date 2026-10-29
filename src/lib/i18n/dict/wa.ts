@@ -27,6 +27,7 @@ const d: Record<string, [string, string]> = {
   "Programı yeniden başlat": ["Restart the program", "Перезапустить программу"],
   "WhatsApp bağlantısı kesilsin mi? Tekrar bağlamak için yeni QR okutmanız gerekir.": ["Disconnect WhatsApp? You will need to scan a new QR to link it again.", "Отключить WhatsApp? Чтобы подключить снова, нужно будет отсканировать новый QR."],
   "Salon bilgisayarına kurulum": ["Install on the salon computer", "Установка на компьютер салона"],
+  "Program kurulu ({host}). Başka bir bilgisayara taşımak gerekirse buradan yeniden kurulur.": ["Installed ({host}). Reinstall from here only to move it to another computer.", "Программа установлена ({host}). Переустановка здесь нужна только при переносе на другой компьютер."],
   "Program salondaki Mac'te arka planda çalışır, bilgisayar açılınca kendiliğinden başlar. Kurulum bir kez yapılır.": ["The program runs in the background on the salon Mac and starts by itself when the computer turns on. Installation is done once.", "Программа работает в фоне на Mac в салоне и запускается сама при включении компьютера. Установка выполняется один раз."],
   "Mevcut kod oluşturulma: {d}": ["Current code created: {d}", "Текущий код создан: {d}"],
   "Kurulum kodu oluştur": ["Create setup code", "Создать код установки"],
