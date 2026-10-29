@@ -1,0 +1,13 @@
+{
+  "name": "bamboo-whatsapp-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bamboo CRM WhatsApp bağlantı programı (sadece bağlı kalır, mesaj göndermez)",
+  "type": "module",
+  "main": "bridge.mjs",
+  "engines": { "node": ">=20" },
+  "scripts": { "start": "node bridge.mjs" },
+  "dependencies": {
+    "baileys": "7.0.0-rc14"
+  }
+}

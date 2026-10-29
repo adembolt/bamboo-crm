@@ -149,5 +149,66 @@ export async function POST(req: NextRequest) {
     return json({ ok: true, report: { ...report, unmatchedServices: report.unmatchedServices.slice(0, 60) } });
   }
 
+  /* ---------------- ürünler (liste tablosundan) ---------------- */
+  if (body.kind === "products") {
+    type P = { id: string; name: string; article?: string; category: string; sale: string; make: string; buyDate: string; buy: string; qty: string; mat: string };
+    const list = (body.data as { products?: P[] })?.products;
+    if (!Array.isArray(list)) return json({ error: "bad_payload" }, 422);
+    const num = (v: string) => { const n = Number(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
+    const UNIT: Record<string, string> = { pcs: "adet", g: "g", ml: "ml", mg: "mg", cm: "cm", pkg: "paket" };
+    const qtyOf = (v: string) => { const m = String(v ?? "").match(/^(-?[\d.,]+)\s*([a-zA-Zа-яА-Я.]*)/); return m ? { n: num(m[1]), u: UNIT[m[2].replace(".", "")] ?? m[2] } : null; };
+    const { data: existing } = await db.from("products").select("id, dikidi_id, stock_qty");
+    const byD = new Map((existing ?? []).filter((x) => x.dikidi_id).map((x) => [x.dikidi_id as string, x]));
+    const report = { products: list.length, inserted: 0, updated: 0, retail: 0, materialOnly: 0 };
+    if (body.dryRun) return json({ ok: true, dryRun: true, report });
+    const moves: { product_id: string; kind: "adjust"; qty: number; unit_cost: number | null; note: string }[] = [];
+    for (const p of list) {
+      const q = qtyOf(p.qty), mq = qtyOf(p.mat);
+      const retail = p.sale.trim() !== "-" && num(p.sale) > 0;
+      if (retail) report.retail++; else report.materialOnly++;
+      const [d, m, y] = (p.buyDate || "").split(".");
+      const row = {
+        name: p.name.slice(0, 200), category: p.category.slice(0, 120), brand: "", barcode: (p.article ?? "").slice(0, 60),
+        unit: q?.u || mq?.u || "adet", sale_price: retail ? num(p.sale) : 0, cost_price: num(p.buy), use_price: p.make.trim() === "-" ? 0 : num(p.make),
+        stock_qty: q?.n ?? 0, material_qty: mq?.n ?? 0, material_unit: mq?.u ?? "",
+        last_purchase_at: y && m && d ? `${y}-${m}-${d}` : null, is_retail: retail, is_active: true, dikidi_id: p.id,
+      };
+      const ex = byD.get(p.id);
+      if (ex) {
+        const { error } = await db.from("products").update(row).eq("id", ex.id);
+        if (error) return json({ error: error.message }, 500);
+        const diff = (row.stock_qty ?? 0) - Number(ex.stock_qty);
+        if (diff) moves.push({ product_id: ex.id, kind: "adjust", qty: diff, unit_cost: null, note: "DIKIDI eşitleme" });
+        report.updated++;
+      } else {
+        const { data: ins, error } = await db.from("products").insert(row).select("id").single();
+        if (error || !ins) return json({ error: error?.message ?? "insert" }, 500);
+        if (row.stock_qty) moves.push({ product_id: ins.id, kind: "adjust", qty: row.stock_qty, unit_cost: row.cost_price || null, note: "DIKIDI açılış stoğu" });
+        report.inserted++;
+      }
+    }
+    for (let i = 0; i < moves.length; i += 500) await db.from("stock_moves").insert(moves.slice(i, i + 500));
+    return json({ ok: true, report });
+  }
+
+  /* ---------------- tedarikçiler / depolar ---------------- */
+  if (body.kind === "suppliers" || body.kind === "warehouses") {
+    const rows = ((body.data as { rows?: string[][] })?.rows ?? []).filter((r) => Array.isArray(r) && r[0] && !/^(Counterparty|Name)\b/.test(r[0]));
+    const seen = new Set<string>(); const out: { name: string; extra: string }[] = [];
+    for (const r of rows) { const name = String(r[0]).trim().slice(0, 120); if (seen.has(name)) continue; seen.add(name); out.push({ name, extra: String(r[1] ?? "").trim() }); }
+    if (body.dryRun) return json({ ok: true, dryRun: true, report: { rows: out.length } });
+    for (const r of out) {
+      if (body.kind === "suppliers") {
+        const phone = r.extra.replace(/\D/g, "") ? "+" + r.extra.replace(/\D/g, "") : "";
+        const { error } = await db.from("suppliers").upsert({ name: r.name, phone, dikidi_name: r.name }, { onConflict: "dikidi_name" });
+        if (error) return json({ error: error.message }, 500);
+      } else {
+        const { error } = await db.from("warehouses").upsert({ name: r.name, responsible_staff_id: r.extra ? findStaff(r.extra) : null, dikidi_name: r.name }, { onConflict: "dikidi_name" });
+        if (error) return json({ error: error.message }, 500);
+      }
+    }
+    return json({ ok: true, report: { rows: out.length } });
+  }
+
   return json({ error: "unknown_kind" }, 422);
 }

@@ -92,7 +92,10 @@ export type GiftCardUse = { id: string; gift_card_id: string; sale_id: string | 
 export type Product = {
   id: string; name: string; brand: string; category: string; barcode: string; unit: string; sale_price: number; cost_price: number;
   stock_qty: number; min_stock: number; is_retail: boolean; is_active: boolean; notes: string;
+  dikidi_id: string | null; use_price: number; material_qty: number; material_unit: string; last_purchase_at: string | null;
 } & Timestamps;
+export type Supplier = { id: string; name: string; phone: string; notes: string; dikidi_name: string | null; created_at: string };
+export type Warehouse = { id: string; name: string; responsible_staff_id: string | null; is_active: boolean; dikidi_name: string | null; created_at: string };
 export type StockMove = { id: string; product_id: string; kind: "purchase" | "sale" | "use" | "adjust" | "return"; qty: number; unit_cost: number | null; note: string; sale_id: string | null; staff_id: string | null; created_by: string | null; created_at: string };
 export type PromoCode = { code: string; percent: number; description: string; valid_until: string | null; is_active: boolean; created_at: string };
 export type VisitFile = { id: string; visit_id: string; customer_id: string | null; storage_path: string; file_name: string; mime: string; size_bytes: number; created_by: string | null; created_at: string };
@@ -155,6 +158,8 @@ export type Database = {
       gift_cards: Tbl<GiftCard, "buyer_name" | "customer_id" | "sale_id" | "expires_at" | "notes" | "created_by", [R<"gift_cards_customer_id_fkey","customer_id","customers">, R<"gift_cards_sale_id_fkey","sale_id","sales">]>;
       gift_card_uses: Tbl<GiftCardUse, "sale_id", [R<"gift_card_uses_gift_card_id_fkey","gift_card_id","gift_cards">]>;
       products: Tbl<Product, Exclude<keyof Product, "name">>;
+      suppliers: Tbl<Supplier, Exclude<keyof Supplier, "name">>;
+      warehouses: Tbl<Warehouse, Exclude<keyof Warehouse, "name">>;
       stock_moves: Tbl<StockMove, "unit_cost" | "note" | "sale_id" | "staff_id" | "created_by", [R<"stock_moves_product_id_fkey","product_id","products">, R<"stock_moves_staff_id_fkey","staff_id","staff">]>;
       promo_codes: { Row: PromoCode; Insert: Partial<PromoCode> & { code: string; percent: number }; Update: Partial<PromoCode>; Relationships: [] };
       visit_files: Tbl<VisitFile, "customer_id" | "mime" | "size_bytes" | "created_by", [R<"visit_files_visit_id_fkey","visit_id","visits">]>;

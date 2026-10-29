@@ -7,6 +7,7 @@ import clients from "./clients";
 import admin from "./admin";
 import hours from "./hours";
 import crm from "./crm";
+import wa from "./wa";
 import overrides from "./overrides";
 
-export const DICT: Record<string, [string, string]> = { ...admin, ...clients, ...kasa, ...visit, ...calendar, ...hours, ...crm, ...common, ...overrides };
+export const DICT: Record<string, [string, string]> = { ...admin, ...clients, ...kasa, ...visit, ...calendar, ...hours, ...crm, ...wa, ...common, ...overrides };
