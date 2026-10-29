@@ -4,6 +4,7 @@ import { loadDay, loadServicesForPicker } from "@/lib/queries/calendar";
 import { todayIso, addDays, fmtDateLong, fmtDate } from "@/lib/format";
 import { DayCalendar } from "./day-calendar";
 import { TodayButton } from "./today-button";
+import { FreeSlotFinder } from "./free-slots";
 import { CalendarShell } from "./calendar-shell";
 import { AppointmentSearch } from "./appointment-search";
 import { MiniCalendar, KasaSnapshot } from "./side-panel";
@@ -61,6 +62,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           <Link role="tab" aria-selected={isWeek} href={`/panel/takvim?d=${d}&v=week${weekStaffId ? `&s=${weekStaffId}` : ""}`} className={`px-3 py-1 rounded-md text-sm font-semibold ${isWeek ? "bg-surface shadow-card" : "text-muted"}`}>{t("Hafta")}</Link>
         </div>
         <div className="ml-auto flex items-center gap-2 flex-wrap w-full sm:w-auto">
+        {canWrite && <FreeSlotFinder date={d} services={picker.services.map((s) => ({ ...s, price: Number(s.price) }))} staff={day.staff.map((s) => ({ id: s.id, full_name: s.full_name, color: s.color }))} staffServices={staffServices} />}
         <AppointmentSearch />
         <form action="/panel/takvim">
           {isWeek && <><input type="hidden" name="v" value="week" /><input type="hidden" name="s" value={weekStaffId} /></>}
@@ -73,9 +75,10 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           <KasaSnapshot date={d} gross={sum.gross} byMethod={sum.byMethod} expected={sum.expected} openCount={kasa.visits.filter((v) => !v.sale).length} closedCount={kasa.visits.filter((v) => v.sale).length + kasa.otherSales.length} />
         </>}>
         <DayCalendar
-          key={(isWeek ? `w${weekStart}${weekStaffId}` : `d${d}`) + (typeof sp.open === "string" ? sp.open : "")}
+          key={(isWeek ? `w${weekStart}${weekStaffId}` : `d${d}`) + (typeof sp.open === "string" ? sp.open : "") + (typeof sp.new === "string" ? sp.new : "")}
           date={d}
           openVisit={typeof sp.open === "string" ? sp.open : undefined}
+          newDraft={typeof sp.new === "string" && /^[0-9a-f-]{36}~\d{2}:\d{2}~[0-9a-f-]{36}$/.test(sp.new) ? { staffId: sp.new.split("~")[0], startHHMM: sp.new.split("~")[1], serviceId: sp.new.split("~")[2] } : undefined}
           week={isWeek && weekStaffId ? { dates: weekDates, staffId: weekStaffId } : undefined}
           staff={day.staff}
           items={day.items}

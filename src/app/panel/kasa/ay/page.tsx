@@ -14,6 +14,7 @@ function monthRange(m: string) {
   const endD = new Date(Date.UTC(y, mo, 0));
   return { start, end: endD.toISOString().slice(0, 10), days: endD.getUTCDate() };
 }
+function addDaysIso(d: string, n: number) { const x = new Date(`${d}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
 function shiftMonth(m: string, n: number) { const [y, mo] = m.split("-").map(Number); const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return d.toISOString().slice(0, 7); }
 
 export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa/ay">) {
@@ -24,7 +25,8 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
   const isManager = !!profile && ["owner", "manager"].includes(profile.role);
   const [t, lang] = [await getT(), await getLang()];
 
-  const [{ data: sales }, { data: pays }, { data: exps }, { data: staff }, { data: payouts }, earn, { data: settings }] = await Promise.all([
+  const prevStart = `${shiftMonth(m, -1)}-01`, prevEnd = addDaysIso(start, -1);
+  const [{ data: sales }, { data: pays }, { data: exps }, { data: staff }, { data: payouts }, earn, { data: settings }, { data: mats }, { data: prevPays }] = await Promise.all([
     supabase.from("sales").select("id, sale_date, total").gte("sale_date", start).lte("sale_date", end),
     supabase.from("sale_payments").select("method, amount, sale:sales!inner(sale_date)").gte("sale.sale_date", start).lte("sale.sale_date", end),
     supabase.from("expenses").select("expense_date, category, amount, method, staff_id").gte("expense_date", start).lte("expense_date", end),
@@ -32,13 +34,20 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
     supabase.from("staff_payouts").select("*").gte("period_start", start).lte("period_end", end),
     computePayroll(supabase, start, end),
     supabase.from("settings").select("kdv_rate").eq("id", 1).single(),
+    supabase.from("sale_items").select("kind, qty, material_cost, product:products(cost_price), sale:sales!inner(sale_date)").gte("sale.sale_date", start).lte("sale.sale_date", end).limit(10000),
+    supabase.from("sale_payments").select("method, amount, sale:sales!inner(sale_date)").gte("sale.sale_date", prevStart).lte("sale.sale_date", prevEnd).limit(10000),
   ]);
+  // Sarf + satılan ürünlerin alış maliyeti
+  const materials = ((mats ?? []) as unknown as { kind: string; qty: number; material_cost: number; product: { cost_price: number } | null }[])
+    .reduce((s, i) => s + Number(i.material_cost ?? 0) + (i.kind === "product" && i.product ? Number(i.product.cost_price) * Number(i.qty) : 0), 0);
 
   // Ciro = gerçek tahsilat (hediye çeki / puan / bakiye ile ödenen kısım, yüklendiği gün zaten sayıldı)
   const NOT_MONEY = ["gift_card", "points", "balance"];
   const byMethod: Record<string, number> = {};
   for (const p of pays ?? []) byMethod[p.method] = (byMethod[p.method] ?? 0) + Number(p.amount);
   const gross = (pays ?? []).filter((p) => !NOT_MONEY.includes(p.method)).reduce((s, p) => s + Number(p.amount), 0);
+  const prevGross = (prevPays ?? []).filter((p) => !NOT_MONEY.includes(p.method)).reduce((s, p) => s + Number(p.amount), 0);
+  const change = prevGross > 0 ? Math.round(((gross - prevGross) / prevGross) * 1000) / 10 : null;
   const expTotal = (exps ?? []).reduce((s, e) => s + Number(e.amount), 0);
   const byCat: Record<string, number> = {};
   for (const e of exps ?? []) byCat[e.category] = (byCat[e.category] ?? 0) + Number(e.amount);
@@ -69,11 +78,11 @@ export default async function MonthPage({ searchParams }: PageProps<"/panel/kasa
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Kpi label={t("Aylık ciro")} value={money(gross)} sub={t("{n} satış · net {net}", { n: (sales ?? []).length, net: money(net) })} accent />
+        <Kpi label={t("Aylık ciro")} value={money(gross)} sub={`${change === null ? "" : `${change >= 0 ? "▲" : "▼"} %${Math.abs(change)} ${t("geçen aya göre")} · `}${t("{n} satış · net {net}", { n: (sales ?? []).length, net: money(net) })}`} accent />
         <Kpi label={t("Nakit / Kart")} value={`${money(byMethod.cash ?? 0)} / ${money(byMethod.card ?? 0)}`} sub={t("havale {amount}", { amount: money(byMethod.transfer ?? 0) })} />
         <Kpi label={t("Giderler")} value={money(expTotal)} sub={Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k, v]) => `${t(k)} ${money(v)}`).join(" · ") || "—"} />
         <Kpi label={t("Personel hak edişi")} value={money(totalDue)} sub={t("maaş şemalarına göre")} />
-        <Kpi label={t("Kalan (kaba)")} value={money(gross - expTotal - totalDue)} sub={t("ciro − gider − hak ediş")} />
+        <Kpi label={t("Kâr (yaklaşık)")} value={money(gross - expTotal - totalDue - materials)} sub={t("ciro − gider − hak ediş − sarf/ürün maliyeti ({m})", { m: money(materials) })} />
       </div>
 
       <section className="panel grid gap-2">

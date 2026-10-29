@@ -201,3 +201,19 @@ export async function updateVisitNotes(visitId: string, notes: string, internal:
   revalidatePath("/panel/takvim");
   return { ok: true as const };
 }
+
+/** Önce hizmet seç → önümüzdeki günlerde tüm uzmanlarda boş saatler */
+export async function findFreeSlots(input: { serviceId: string; staffId: string | null; from: string; days: number }) {
+  await requireOps();
+  const { getSlots } = await import("@/lib/booking/availability");
+  const { addDays } = await import("@/lib/format");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.from)) return { ok: false as const, error: "date" };
+  const days = Math.max(1, Math.min(14, input.days || 7));
+  const out: { date: string; slots: { time: string; staffIds: string[] }[] }[] = [];
+  for (let i = 0; i < days; i++) {
+    const date = addDays(input.from, i);
+    const r = await getSlots({ serviceId: input.serviceId, staffId: input.staffId, date, panel: true });
+    out.push({ date, slots: r.slots });
+  }
+  return { ok: true as const, days: out };
+}

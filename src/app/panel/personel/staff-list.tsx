@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import type { Staff, StaffPayScheme } from "@/lib/database.types";
@@ -34,7 +35,7 @@ export function StaffList({ staff, canManage, services, categories, assigned, ho
   const nextOff = (id: string) => hours.offs.filter((o) => o.staff_id === id && o.ends_at >= new Date().toISOString()).sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
   return (
     <div className="grid gap-4">
-      <header className="flex items-center gap-3"><h1 className="text-xl font-bold">{t("Personel")}</h1>{canManage && <button className="btn ml-auto" onClick={() => setEdit("new")}>+ {t("Personel ekle")}</button>}</header>
+      <header className="flex items-center gap-3"><h1 className="text-xl font-bold">{t("Personel")}</h1><Link href="/panel/personel/takvim" className="btn ghost sm">🗓 {t("Çalışma takvimi")}</Link>{canManage && <button className="btn ml-auto" onClick={() => setEdit("new")}>+ {t("Personel ekle")}</button>}</header>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {staff.map((s) => (
           <div key={s.id} className={`panel grid gap-2 ${!s.is_active ? "opacity-60" : ""}`}>

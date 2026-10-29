@@ -142,3 +142,47 @@ export async function deletePayScheme(id: string) {
   revalidatePath("/panel/personel"); revalidatePath("/panel/kasa");
   return { ok: true as const };
 }
+
+/* ---------------- aylık çalışma takvimi (gün gün) ---------------- */
+/** Seçilen günlere aynı saatleri yazar (null = o gün çalışmıyor). Haftalık programdaki personel ilk düzenlemede gün gün moda geçer:
+    o ay ve sonraki 2 ay haftalık programdan doldurulur, böylece hiçbir gün kaybolmaz. */
+export async function setDayHours(input: { staffIds: string[]; days: string[]; ranges: { start: string; end: string }[] | null }) {
+  const { supabase } = await requireManager();
+  const t = await getT();
+  const days = input.days.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+  const ranges = (input.ranges ?? []).filter((r) => HM.test(r.start) && HM.test(r.end));
+  if (!days.length || !input.staffIds.length) return { ok: false as const, error: t("Gün seçin.") };
+  for (const r of ranges) if (r.end <= r.start) return { ok: false as const, error: t("Bitiş saati başlangıçtan sonra olmalı.") };
+  const sorted = [...ranges].sort((a, b) => a.start.localeCompare(b.start));
+  for (let i = 1; i < sorted.length; i++) if (sorted[i].start < sorted[i - 1].end) return { ok: false as const, error: t("Aynı gün içindeki saat aralıkları çakışıyor.") };
+
+  const { data: staff } = await supabase.from("staff").select("id, schedule_mode").in("id", input.staffIds);
+  const weekly = (staff ?? []).filter((s) => s.schedule_mode !== "daily").map((s) => s.id);
+  if (weekly.length) {
+    const [{ data: sched }, { data: st }] = await Promise.all([
+      supabase.from("staff_schedules").select("staff_id, weekday, start_time, end_time").in("staff_id", weekly),
+      supabase.from("settings").select("open_time, close_time, open_days").eq("id", 1).single(),
+    ]);
+    const first = [...days].sort()[0];
+    const start = new Date(`${first.slice(0, 7)}-01T12:00:00Z`);
+    const fill: { staff_id: string; day: string; start_time: string; end_time: string; source: string }[] = [];
+    for (let d = new Date(start); d < new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 3, 1)); d.setUTCDate(d.getUTCDate() + 1)) {
+      const iso = d.toISOString().slice(0, 10); const wd = d.getUTCDay() === 0 ? 7 : d.getUTCDay();
+      for (const sid of weekly) {
+        const mine = (sched ?? []).filter((r) => r.staff_id === sid);
+        if (mine.length) mine.filter((r) => r.weekday === wd).forEach((r) => fill.push({ staff_id: sid, day: iso, start_time: r.start_time.slice(0, 5), end_time: r.end_time.slice(0, 5), source: "weekly" }));
+        else if ((st?.open_days ?? [1, 2, 3, 4, 5, 6, 7]).includes(wd)) fill.push({ staff_id: sid, day: iso, start_time: String(st?.open_time ?? "10:00").slice(0, 5), end_time: String(st?.close_time ?? "21:00").slice(0, 5), source: "weekly" });
+      }
+    }
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 3, 0)).toISOString().slice(0, 10);
+    await supabase.from("staff_day_hours").delete().in("staff_id", weekly).gte("day", start.toISOString().slice(0, 10)).lte("day", end);
+    for (let i = 0; i < fill.length; i += 500) { const { error } = await supabase.from("staff_day_hours").insert(fill.slice(i, i + 500)); if (error) return { ok: false as const, error: error.message }; }
+    await supabase.from("staff").update({ schedule_mode: "daily" }).in("id", weekly);
+  }
+  const { error: delErr } = await supabase.from("staff_day_hours").delete().in("staff_id", input.staffIds).in("day", days);
+  if (delErr) return { ok: false as const, error: delErr.message };
+  const rows = input.staffIds.flatMap((sid) => days.flatMap((day) => ranges.map((r) => ({ staff_id: sid, day, start_time: r.start, end_time: r.end, source: "panel" }))));
+  if (rows.length) { const { error } = await supabase.from("staff_day_hours").insert(rows); if (error) return { ok: false as const, error: error.message }; }
+  revalidatePath("/panel/personel"); revalidatePath("/panel/takvim");
+  return { ok: true as const };
+}

@@ -42,6 +42,7 @@ export function DayCalendar(props: {
   categories: CategoryLite[];
   canWrite: boolean;
   openVisit?: string;
+  newDraft?: { staffId: string; startHHMM: string; serviceId: string };
 }) {
   const { date, staff, items, settings, canWrite } = props;
   const t = useT();
@@ -121,7 +122,7 @@ export function DayCalendar(props: {
     try { localStorage.setItem("bamboo-cal-hidden-staff", JSON.stringify([...next])); } catch {}
   }
   function toggleStaff(id: string) { const n = new Set(hidden); if (n.has(id)) n.delete(id); else n.add(id); persistHidden(n); }
-  const [draft, setDraft] = useState<{ staffId: string | null; startHHMM: string; date?: string; visitId?: string; customer?: PickedCustomer } | null>(null);
+  const [draft, setDraft] = useState<{ staffId: string | null; startHHMM: string; date?: string; visitId?: string; customer?: PickedCustomer; serviceId?: string } | null>(props.newDraft ? { ...props.newDraft, date: props.date } : null);
 
   const byStaff = useMemo(() => {
     const m = new Map<string, DayItem[]>();
@@ -451,7 +452,7 @@ function toMin(t: string) {
    --------------------------------------------------------------- */
 function NewItemDialog(props: {
   date: string;
-  draft: { staffId: string | null; startHHMM: string; visitId?: string; customer?: PickedCustomer };
+  draft: { staffId: string | null; startHHMM: string; visitId?: string; customer?: PickedCustomer; serviceId?: string };
   staff: Staff[];
   services: ServiceLite[];
   categories: CategoryLite[];
@@ -471,7 +472,7 @@ function NewItemDialog(props: {
   const [time, setTime] = useState(props.draft.startHHMM);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>("");
-  const [serviceId, setServiceId] = useState<string>("");
+  const [serviceId, setServiceId] = useState<string>(props.draft.serviceId ?? "");
   const [price, setPrice] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [customer, setCustomer] = useState<PickedCustomer | null>(props.draft.customer ?? null);
