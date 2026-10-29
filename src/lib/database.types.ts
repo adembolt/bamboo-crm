@@ -36,7 +36,7 @@ export type Service = {
 } & Timestamps;
 
 export type Staff = {
-  id: string; full_name: string; title: string; title_en: string; title_ru: string; phone: string; color: string; photo_url: string | null;
+  id: string; full_name: string; title: string; title_en: string; title_ru: string; schedule_mode: "weekly" | "daily"; dikidi_master_id: string | null; phone: string; color: string; photo_url: string | null;
   languages: string[]; online_bookable: boolean; pay_model: "daily_prim" | "percent" | "fixed";
   pay_percent: number; product_percent: number; is_active: boolean; sort_order: number; dikidi_id: string | null;
 } & Timestamps;
@@ -108,6 +108,17 @@ export type BookingRequest = {
   status: "new" | "approved" | "rejected" | "expired"; visit_id: string | null; ip_hash: string; created_at: string;
 };
 
+export type WaState = "offline" | "starting" | "qr" | "connected" | "reconnecting" | "logged_out";
+export type WaBridge = {
+  id: number; token_hash: string | null; token_created_at: string | null; state: WaState; qr: string | null; phone: string | null;
+  push_name: string | null; version: string | null; host: string | null; error: string | null; last_seen: string | null;
+  command: "logout" | "restart" | null; send_enabled: boolean; updated_at: string;
+};
+export type WaOutbox = {
+  id: string; to_phone: string; body: string; kind: string | null; visit_id: string | null; customer_id: string | null;
+  status: "queued" | "sending" | "sent" | "failed" | "cancelled"; error: string | null; created_at: string; sent_at: string | null; created_by: string | null;
+};
+
 type Rel = { foreignKeyName: string; columns: string[]; isOneToOne: boolean; referencedRelation: string; referencedColumns: string[] };
 type R<N extends string, C extends string, T extends string> = { foreignKeyName: N; columns: [C]; isOneToOne: false; referencedRelation: T; referencedColumns: ["id"] };
 
@@ -129,7 +140,8 @@ export type Database = {
       staff_schedules: Tbl<StaffSchedule>;
       staff_time_off: Tbl<StaffTimeOff, "reason">;
       resources: Tbl<Resource, "kind" | "capacity" | "is_active" | "sort_order">;
-      staff_services: { Row: { staff_id: string; service_id: string; price_override: number | null; duration_override: number | null }; Insert: { staff_id: string; service_id: string; price_override?: number | null; duration_override?: number | null }; Update: Partial<{ staff_id: string; service_id: string; price_override: number | null; duration_override: number | null }>; Relationships: [] };
+      staff_services: { Row: { staff_id: string; service_id: string; price_override: number | null; duration_override: number | null; online: boolean }; Insert: { staff_id: string; service_id: string; price_override?: number | null; duration_override?: number | null; online?: boolean }; Update: Partial<{ staff_id: string; service_id: string; price_override: number | null; duration_override: number | null; online: boolean }>; Relationships: [] };
+      staff_day_hours: { Row: { staff_id: string; day: string; start_time: string; end_time: string; source: string }; Insert: { staff_id: string; day: string; start_time: string; end_time: string; source?: string }; Update: Partial<{ staff_id: string; day: string; start_time: string; end_time: string; source: string }>; Relationships: [] };
       service_resources: { Row: { service_id: string; resource_id: string }; Insert: { service_id: string; resource_id: string }; Update: Partial<{ service_id: string; resource_id: string }>; Relationships: [] };
       customers: Tbl<Customer, Exclude<keyof Customer, "first_name">>;
       visits: Tbl<Visit, Exclude<keyof Visit, "visit_date">, [R<"visits_customer_id_fkey","customer_id","customers">]>;
@@ -152,6 +164,8 @@ export type Database = {
       message_templates: { Row: MessageTemplate; Insert: { kind: string; locale: string; body: string; updated_at?: string }; Update: Partial<MessageTemplate>; Relationships: [] };
       message_log: Tbl<MessageLog, "customer_id" | "visit_id" | "channel" | "body" | "sent_at" | "sent_by", [R<"message_log_customer_id_fkey","customer_id","customers">, R<"message_log_visit_id_fkey","visit_id","visits">]>;
       booking_requests: Tbl<BookingRequest, "last_name" | "email" | "locale" | "staff_id" | "notes" | "status" | "visit_id" | "ip_hash", [R<"booking_requests_service_id_fkey","service_id","services">, R<"booking_requests_staff_id_fkey","staff_id","staff">]>;
+      wa_bridge: Tbl<WaBridge, Exclude<keyof WaBridge, "id">>;
+      wa_outbox: Tbl<WaOutbox, "kind" | "visit_id" | "customer_id" | "status" | "error" | "sent_at" | "created_by", [R<"wa_outbox_visit_id_fkey","visit_id","visits">, R<"wa_outbox_customer_id_fkey","customer_id","customers">]>;
     };
     Views: {
       customer_list: { Row: { id: string; first_name: string; last_name: string; phone: string; tags: string[]; locale: string; no_show_count: number; is_blocked: boolean; balance: number; loyalty_points: number; birth_date: string | null; created_at: string; consent_marketing: boolean; source: string; last_visit: string | null; next_visit: string | null; visits: number; spent: number; packages: number; bday_in: number | null }; Relationships: [] };

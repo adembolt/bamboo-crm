@@ -14,7 +14,7 @@ import { CloseDialog } from "@/app/panel/kasa/close-dialog";
 import { StaffAvatar } from "@/components/staff-avatar";
 import { useT, useLang } from "@/lib/i18n/client";
 import { localName, staffTitle } from "@/lib/i18n/core";
-import { weekdayOf, workWindows, offBlocks, offHours, isWorking, type SchedRow } from "@/lib/schedule";
+import { weekdayOf, workWindows, offBlocks, offHours, isWorking, type SchedRow, type DayHourRow } from "@/lib/schedule";
 
 type ServiceLite = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en: string; name_ru?: string | null; duration_min: number; buffer_min: number; price: number; kind: string };
 type CategoryLite = { id: string; name_tr: string; name_en?: string | null; name_ru?: string | null; sort_order: number; color: string };
@@ -33,6 +33,7 @@ export function DayCalendar(props: {
   items: DayItem[];
   timeOff: { staff_id: string; starts_at: string; ends_at: string; reason: string }[];
   schedules: SchedRow[];
+  dayHours: DayHourRow[];
   settings: { open_time: string; close_time: string; slot_minutes: number };
   services: ServiceLite[];
   staffServices: Record<string, string[]>;
@@ -53,7 +54,8 @@ export function DayCalendar(props: {
   const totalMin = closeMin - openMin;
   // personelin bir gündeki çalışma pencereleri / izinleri
   const hoursFor = (staffId: string, d: string) => {
-    const w = workWindows(staffId, weekdayOf(d), props.schedules, openMin, closeMin);
+    const mode = staff.find((x) => x.id === staffId)?.schedule_mode;
+    const w = workWindows(staffId, weekdayOf(d), props.schedules, openMin, closeMin, { mode, date: d, rows: props.dayHours });
     const o = offBlocks(staffId, d, props.timeOff);
     const fullOff = o.some((x) => x.a <= openMin && x.b >= closeMin);
     return { w, o, grey: offHours(w, openMin, closeMin), working: w.length > 0 && !fullOff, fullOff };

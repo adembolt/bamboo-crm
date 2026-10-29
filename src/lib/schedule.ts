@@ -12,7 +12,13 @@ export const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); r
 /** ISO hafta günü: 1 = Pazartesi … 7 = Pazar (İstanbul) */
 export function weekdayOf(isoDate: string) { const w = new Date(isoDate + "T12:00:00+03:00").getUTCDay(); return w === 0 ? 7 : w; }
 
-export function workWindows(staffId: string, weekday: number, schedules: SchedRow[], openMin: number, closeMin: number): [number, number][] {
+export type DayHourRow = { staff_id: string; day: string; start_time: string; end_time: string };
+
+/** daily = DIKIDI gibi gün gün program: o gün satırı yoksa çalışmıyor. Aksi halde haftalık program / salon saatleri */
+export function workWindows(staffId: string, weekday: number, schedules: SchedRow[], openMin: number, closeMin: number, daily?: { mode?: string | null; date: string; rows: DayHourRow[] }): [number, number][] {
+  if (daily && daily.mode === "daily") {
+    return daily.rows.filter((r) => r.staff_id === staffId && r.day === daily.date).map((r) => [toMin(r.start_time), toMin(r.end_time)] as [number, number]).sort((a, b) => a[0] - b[0]);
+  }
   const mine = schedules.filter((s) => s.staff_id === staffId);
   if (!mine.length) return [[openMin, closeMin]];
   return mine.filter((s) => s.weekday === weekday).map((s) => [toMin(s.start_time), toMin(s.end_time)] as [number, number]).sort((a, b) => a[0] - b[0]);
