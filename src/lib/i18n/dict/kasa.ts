@@ -43,6 +43,7 @@ const d: Record<string, [string, string]> = {
   "Çek bakiyesi yetersiz ({code}: {balance}).": ["Insufficient gift card balance ({code}: {balance}).", "Недостаточно средств на сертификате ({code}: {balance})."],
   "Bakiye yetersiz (mevcut {n}).": ["Insufficient balance (available {n}).", "Недостаточно средств на балансе (доступно {n})."],
   "Yeterli puan yok (mevcut {have}, gereken {need}).": ["Not enough points (available {have}, needed {need}).", "Недостаточно баллов (доступно {have}, нужно {need})."],
+  "Puanla en fazla tutarın %{p} kadarı ödenebilir ({n}).": ["Points can cover at most {p}% of the total ({n}).", "Баллами можно оплатить не более {p}% суммы ({n})."],
   "Ödeme toplamı ({paid}) tutarla ({total}) eşleşmiyor.": ["Payment total ({paid}) does not match the amount ({total}).", "Сумма оплаты ({paid}) не совпадает с итогом ({total})."],
   "Satış oluşturulamadı": ["Could not create the sale", "Не удалось создать продажу"],
   "Tutar gerekli.": ["Amount is required.", "Укажите сумму."],

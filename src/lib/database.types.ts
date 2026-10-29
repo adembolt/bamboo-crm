@@ -17,7 +17,7 @@ export type Settings = {
   slot_minutes: number; open_time: string; close_time: string; open_days: number[];
   online_booking_enabled: boolean; online_requires_approval: boolean; online_min_notice_minutes: number;
   online_max_days_ahead: number; online_cancel_limit_minutes: number; kdv_rate: number;
-  whatsapp_number: string; instagram_url: string; google_review_url: string; import_token: string; loyalty_earn_percent: number; loyalty_point_value: number; package_default_months: number; updated_at: string;
+  whatsapp_number: string; instagram_url: string; google_review_url: string; import_token: string; loyalty_earn_percent: number; loyalty_point_value: number; loyalty_max_pay_percent: number; referral_inviter_points: number; referral_invitee_discount: number; package_default_months: number; updated_at: string;
 };
 
 export type ServiceCategory = {
@@ -50,6 +50,7 @@ export type Customer = {
   birth_date: string | null; locale: string; nationality: string; source: string; tags: string[];
   notes: string; health_notes: string; consent_marketing: boolean; consent_at: string | null;
   is_blocked: boolean; no_show_count: number; discount_percent: number; balance: number; dikidi_id: string | null; loyalty_points: number;
+  card_no: string; dikidi_source: string; referred_by: string | null;
 } & Timestamps;
 
 export type Visit = {
@@ -87,13 +88,15 @@ export type StaffPayout = {
   paid_at: string; created_by: string | null; created_at: string;
 };
 
-export type GiftCard = { id: string; code: string; initial_amount: number; balance: number; buyer_name: string; customer_id: string | null; sale_id: string | null; expires_at: string | null; notes: string; created_by: string | null; created_at: string };
+export type GiftCard = { id: string; template_id: string | null; code: string; initial_amount: number; balance: number; buyer_name: string; customer_id: string | null; sale_id: string | null; expires_at: string | null; notes: string; created_by: string | null; created_at: string };
 export type GiftCardUse = { id: string; gift_card_id: string; sale_id: string | null; amount: number; created_at: string };
 export type Product = {
   id: string; name: string; brand: string; category: string; barcode: string; unit: string; sale_price: number; cost_price: number;
   stock_qty: number; min_stock: number; is_retail: boolean; is_active: boolean; notes: string;
   dikidi_id: string | null; use_price: number; material_qty: number; material_unit: string; last_purchase_at: string | null;
 } & Timestamps;
+export type Review = { id: string; customer_id: string | null; author_name: string; staff_id: string | null; rating: number; body: string; reply: string; is_public: boolean; source: string; dikidi_id: string | null; created_at: string };
+export type GiftCardTemplate = { id: string; name: string; usage: "service" | "product" | "both"; amount: number; open_amount: boolean; valid_days: number; bonus_percent: number; sale_from: string | null; sale_to: string | null; sale_limit: number; online: boolean; is_active: boolean; created_at: string };
 export type Supplier = { id: string; name: string; phone: string; notes: string; dikidi_name: string | null; created_at: string };
 export type Warehouse = { id: string; name: string; responsible_staff_id: string | null; is_active: boolean; dikidi_name: string | null; created_at: string };
 export type StockMove = { id: string; product_id: string; kind: "purchase" | "sale" | "use" | "adjust" | "return"; qty: number; unit_cost: number | null; note: string; sale_id: string | null; staff_id: string | null; created_by: string | null; created_at: string };
@@ -155,10 +158,12 @@ export type Database = {
       sale_payments: Tbl<SalePayment, "ref", [R<"sale_payments_sale_id_fkey","sale_id","sales">]>;
       sale_items: Tbl<SaleItem, "visit_item_id" | "product_id" | "kind" | "staff_id" | "qty" | "unit_price" | "discount" | "total", [R<"sale_items_sale_id_fkey","sale_id","sales">, R<"sale_items_staff_id_fkey","staff_id","staff">, R<"sale_items_visit_item_id_fkey","visit_item_id","visit_items">]>;
       staff_payouts: Tbl<StaffPayout, "method" | "notes" | "paid_at" | "created_by", [R<"staff_payouts_staff_id_fkey","staff_id","staff">]>;
-      gift_cards: Tbl<GiftCard, "buyer_name" | "customer_id" | "sale_id" | "expires_at" | "notes" | "created_by", [R<"gift_cards_customer_id_fkey","customer_id","customers">, R<"gift_cards_sale_id_fkey","sale_id","sales">]>;
+      gift_cards: Tbl<GiftCard, "template_id" | "buyer_name" | "customer_id" | "sale_id" | "expires_at" | "notes" | "created_by", [R<"gift_cards_customer_id_fkey","customer_id","customers">, R<"gift_cards_sale_id_fkey","sale_id","sales">]>;
       gift_card_uses: Tbl<GiftCardUse, "sale_id", [R<"gift_card_uses_gift_card_id_fkey","gift_card_id","gift_cards">]>;
       products: Tbl<Product, Exclude<keyof Product, "name">>;
       suppliers: Tbl<Supplier, Exclude<keyof Supplier, "name">>;
+      reviews: Tbl<Review, Exclude<keyof Review, "id">, [R<"reviews_customer_id_fkey","customer_id","customers">]>;
+      gift_card_templates: Tbl<GiftCardTemplate, Exclude<keyof GiftCardTemplate, "name" | "amount">>;
       warehouses: Tbl<Warehouse, Exclude<keyof Warehouse, "name">>;
       stock_moves: Tbl<StockMove, "unit_cost" | "note" | "sale_id" | "staff_id" | "created_by", [R<"stock_moves_product_id_fkey","product_id","products">, R<"stock_moves_staff_id_fkey","staff_id","staff">]>;
       promo_codes: { Row: PromoCode; Insert: Partial<PromoCode> & { code: string; percent: number }; Update: Partial<PromoCode>; Relationships: [] };

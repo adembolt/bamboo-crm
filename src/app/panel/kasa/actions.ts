@@ -50,7 +50,7 @@ export async function closeVisit(input: CloseVisitInput) {
     if (c.expires_at && c.expires_at < visit.visit_date) return { ok: false as const, error: t("Hediye çeki süresi dolmuş: {code}", { code: c.code }) };
     if (Number(c.balance) < Number(p.amount)) return { ok: false as const, error: t("Çek bakiyesi yetersiz ({code}: {balance}).", { code: c.code, balance: c.balance }) };
   }
-  const { data: settings } = await supabase.from("settings").select("loyalty_earn_percent, loyalty_point_value").eq("id", 1).single();
+  const { data: settings } = await supabase.from("settings").select("loyalty_earn_percent, loyalty_point_value, loyalty_max_pay_percent").eq("id", 1).single();
   const pointPays = input.payments.filter((p) => p.method === "points" && Number(p.amount) > 0).reduce((s, p) => s + Number(p.amount), 0);
   let customerPoints = 0;
   if (visit.customer_id) { const { data: cu } = await supabase.from("customers").select("loyalty_points").eq("id", visit.customer_id).single(); customerPoints = cu?.loyalty_points ?? 0; }
@@ -69,6 +69,8 @@ export async function closeVisit(input: CloseVisitInput) {
   const total = Math.round((subtotal - discount) * 100) / 100;
   const paid = input.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   if (Math.abs(paid - total) > 0.5) return { ok: false as const, error: t("Ödeme toplamı ({paid}) tutarla ({total}) eşleşmiyor.", { paid, total }) };
+  const maxPointPay = Math.floor(total * Number(settings?.loyalty_max_pay_percent ?? 100) / 100);
+  if (pointPays > maxPointPay + 0.5) return { ok: false as const, error: t("Puanla en fazla tutarın %{p} kadarı ödenebilir ({n}).", { p: Number(settings?.loyalty_max_pay_percent ?? 100), n: maxPointPay }) };
 
   const { data: sale, error } = await supabase
     .from("sales")

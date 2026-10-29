@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import type { Customer } from "@/lib/database.types";
 
 /* DIKIDI katalog aktarımı (çalışma takvimi, personel ↔ hizmet, …).
    DIKIDI panel sekmesinden tarayıcı JS'i ile çağrılır; settings.import_token ile korunur.
@@ -208,6 +209,117 @@ export async function POST(req: NextRequest) {
       }
     }
     return json({ ok: true, report: { rows: out.length } });
+  }
+
+  /* ---------------- müşteriler (DIKIDI CSV dışa aktarımı + gruplar) ---------------- */
+  if (body.kind === "clients") {
+    const p = body.data as { csv?: string; groups?: Record<string, string[]> };
+    const lines = String(p?.csv ?? "").split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) return json({ error: "bad_payload" }, 422);
+    const H = lines[0].split(";");
+    const col = (name: string) => H.findIndex((h) => h.trim() === name);
+    const C = { name: col("The name of the customer"), surname: col("Client surname"), phone: col("Phone number"), email: col("Email"), discount: col("Discount %"), card: col("Card number"), balance: col("Personal account"), bonus: col("Bonus account"), birthday: col("Birthday"), gender: col("Gender"), black: col("In the black list"), comment: col("Comment"), source: col("Source") };
+    if (C.phone < 0 || C.name < 0) return json({ error: "bad_header" }, 422);
+    // grup → etiket + iletişim dili
+    const GROUP: Record<string, { tag: string; locale?: string }> = { "Русскоязычные": { tag: "RU", locale: "ru" }, "Англоязычные": { tag: "EN", locale: "en" }, "Турецкоговорящие": { tag: "TR", locale: "tr" }, "red list": { tag: "red list" } };
+    const groupsByPhone = new Map<string, string[]>();
+    for (const [g, phones] of Object.entries(p.groups ?? {})) for (const ph of phones ?? []) { const d = String(ph).replace(/\D/g, ""); if (d) groupsByPhone.set(d, [...(groupsByPhone.get(d) ?? []), g]); }
+    const SOURCE: Record<string, string> = { "Search engine": "google", "Recommendation": "tavsiye", "Advertising": "reklam", "Maps": "harita" };
+
+    const all: { id: string; phone: string; first_name: string; last_name: string; email: string; gender: string; birth_date: string | null; locale: string; source: string; tags: string[]; notes: string; is_blocked: boolean; discount_percent: number; balance: number; loyalty_points: number; card_no: string; dikidi_source: string }[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data } = await db.from("customers").select("id, phone, first_name, last_name, email, gender, birth_date, locale, source, tags, notes, is_blocked, discount_percent, balance, loyalty_points, card_no, dikidi_source").range(from, from + 999);
+      all.push(...((data ?? []) as typeof all)); if (!data || data.length < 1000) break;
+    }
+    const byPhone = new Map<string, (typeof all)[number]>();
+    for (const c of all) { const d = c.phone.replace(/\D/g, ""); if (d) byPhone.set(d, c); }
+
+    const report = { rows: 0, matched: 0, created: 0, updated: 0, balanceAdj: 0, pointsAdj: 0, noPhone: 0, groups: 0 };
+    const balMoves: { customer_id: string; amount: number; reason: string }[] = [];
+    const ptMoves: { customer_id: string; points: number; reason: string }[] = [];
+    const dmy = (s: string) => { const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/); return m ? `${m[3]}-${m[2]}-${m[1]}` : null; };
+    for (const line of lines.slice(1)) {
+      const f = line.split(";");
+      const get = (i: number) => (i >= 0 ? String(f[i] ?? "").trim() : "");
+      report.rows++;
+      const digits = get(C.phone).replace(/\D/g, "");
+      if (!digits) { report.noPhone++; continue; }
+      const groups = groupsByPhone.get(digits) ?? [];
+      if (groups.length) report.groups++;
+      const g = get(C.gender).toLowerCase();
+      const srcRaw = get(C.source);
+      const want = {
+        first_name: get(C.name) || "—", last_name: get(C.surname), email: get(C.email),
+        gender: (g.startsWith("f") ? "f" : g.startsWith("m") ? "m" : "") as "" | "f" | "m",
+        birth_date: dmy(get(C.birthday)),
+        discount_percent: Math.max(0, Math.min(100, Number(get(C.discount).replace(",", ".")) || 0)),
+        card_no: get(C.card), is_blocked: get(C.black).toLowerCase() === "yes",
+        balance: Math.round((Number(get(C.balance)) || 0) * 100) / 100,
+        loyalty_points: Math.round(Number(get(C.bonus)) || 0),
+        comment: get(C.comment), dikidi_source: srcRaw,
+        tags: groups.map((x) => GROUP[x]?.tag ?? x),
+        locale: groups.map((x) => GROUP[x]?.locale).find(Boolean),
+      };
+      const ex = byPhone.get(digits);
+      if (!ex) {
+        report.created++;
+        if (body.dryRun) continue;
+        const { data: ins, error } = await db.from("customers").insert({
+          first_name: want.first_name, last_name: want.last_name, phone: "+" + digits, email: want.email, gender: want.gender, birth_date: want.birth_date,
+          locale: want.locale ?? "tr", source: SOURCE[srcRaw] ?? "dikidi", dikidi_source: srcRaw, tags: want.tags, notes: want.comment, is_blocked: want.is_blocked,
+          discount_percent: want.discount_percent, card_no: want.card_no, balance: want.balance, loyalty_points: want.loyalty_points,
+        }).select("id").single();
+        if (error || !ins) return json({ error: error?.message ?? "insert" }, 500);
+        if (want.balance) balMoves.push({ customer_id: ins.id, amount: want.balance, reason: "DIKIDI açılış bakiyesi" });
+        if (want.loyalty_points) ptMoves.push({ customer_id: ins.id, points: want.loyalty_points, reason: "DIKIDI açılış puanı" });
+        continue;
+      }
+      report.matched++;
+      // Yalnızca boş alanları doldur; DIKIDI'ye özgü alanlar (indirim, kart, bakiye, puan, engel) DIKIDI'ye eşitlenir
+      const upd: Partial<Customer> = {};
+      if (!ex.last_name && want.last_name) upd.last_name = want.last_name;
+      if (!ex.email && want.email) upd.email = want.email;
+      if (!ex.gender && want.gender) upd.gender = want.gender;
+      if (!ex.birth_date && want.birth_date) upd.birth_date = want.birth_date;
+      if (want.locale && ex.locale === "tr" && want.locale !== "tr") upd.locale = want.locale;
+      if ((!ex.source || ex.source === "dikidi" || ex.source === "salon") && SOURCE[srcRaw]) upd.source = SOURCE[srcRaw];
+      if (ex.dikidi_source !== srcRaw) upd.dikidi_source = srcRaw;
+      const tags = [...new Set([...(ex.tags ?? []).filter((t) => !Object.values(GROUP).some((G) => G.tag === t) || want.tags.includes(t)), ...want.tags])];
+      if (tags.join("|") !== (ex.tags ?? []).join("|")) upd.tags = tags;
+      if (want.comment && !ex.notes.includes(want.comment.slice(0, 40))) upd.notes = ex.notes ? `${ex.notes}\n${want.comment}` : want.comment;
+      if (Number(ex.discount_percent) !== want.discount_percent) upd.discount_percent = want.discount_percent;
+      if (ex.card_no !== want.card_no) upd.card_no = want.card_no;
+      if (ex.is_blocked !== want.is_blocked) upd.is_blocked = want.is_blocked;
+      const db_ = Math.round((want.balance - Number(ex.balance)) * 100) / 100;
+      if (db_) { upd.balance = want.balance; balMoves.push({ customer_id: ex.id, amount: db_, reason: "DIKIDI eşitleme" }); report.balanceAdj++; }
+      const dp = want.loyalty_points - (ex.loyalty_points ?? 0);
+      if (dp) { upd.loyalty_points = want.loyalty_points; ptMoves.push({ customer_id: ex.id, points: dp, reason: "DIKIDI eşitleme" }); report.pointsAdj++; }
+      if (Object.keys(upd).length) {
+        report.updated++;
+        if (!body.dryRun) { const { error } = await db.from("customers").update(upd).eq("id", ex.id); if (error) return json({ error: error.message }, 500); }
+      }
+    }
+    if (!body.dryRun) {
+      if (balMoves.length) await db.from("balance_ledger").insert(balMoves);
+      if (ptMoves.length) await db.from("loyalty_ledger").insert(ptMoves);
+    }
+    return json({ ok: true, dryRun: !!body.dryRun, report });
+  }
+
+  /* ---------------- yorumlar ---------------- */
+  if (body.kind === "reviews") {
+    const rows = ((body.data as { rows?: { id: string; name: string; phone?: string; text: string; reply: string; at: string; rating: number; public: boolean }[] })?.rows ?? []).filter((r) => r?.id);
+    const { data: cs } = await db.from("customers").select("id, phone");
+    const byPhone = new Map((cs ?? []).map((c) => [c.phone.replace(/\D/g, ""), c.id]));
+    const out = rows.map((r) => ({
+      dikidi_id: String(r.id), author_name: String(r.name ?? "").slice(0, 120), customer_id: byPhone.get(String(r.phone ?? "").replace(/\D/g, "")) ?? null,
+      rating: Math.max(1, Math.min(5, Math.round(Number(r.rating) || 5))), body: String(r.text ?? ""), reply: String(r.reply ?? ""),
+      is_public: r.public !== false, source: "dikidi", created_at: r.at || new Date().toISOString(),
+    }));
+    if (body.dryRun) return json({ ok: true, dryRun: true, report: { rows: out.length, linked: out.filter((r) => r.customer_id).length } });
+    const { error } = await db.from("reviews").upsert(out, { onConflict: "dikidi_id" });
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true, report: { rows: out.length, linked: out.filter((r) => r.customer_id).length } });
   }
 
   return json({ error: "unknown_kind" }, 422);
