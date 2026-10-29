@@ -14,7 +14,7 @@ create table if not exists public.suppliers (
   dikidi_name text,
   created_at timestamptz not null default now()
 );
-create unique index if not exists suppliers_dikidi on public.suppliers (dikidi_name) where dikidi_name is not null;
+create unique index if not exists suppliers_dikidi on public.suppliers (dikidi_name);
 create table if not exists public.warehouses (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -23,7 +23,7 @@ create table if not exists public.warehouses (
   dikidi_name text,
   created_at timestamptz not null default now()
 );
-create unique index if not exists warehouses_dikidi on public.warehouses (dikidi_name) where dikidi_name is not null;
+create unique index if not exists warehouses_dikidi on public.warehouses (dikidi_name);
 alter table public.suppliers enable row level security;
 alter table public.warehouses enable row level security;
 drop policy if exists suppliers_read on public.suppliers;
