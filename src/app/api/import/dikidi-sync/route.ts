@@ -402,11 +402,15 @@ export async function POST(req: NextRequest) {
     }
     // DIKIDI'deki tüm personel için ayı yeniden yaz (hiç günü olmayan personelin eski satırları da silinir)
     const all = [...new Set([...touched, ...staffByMaster.values()])];
+    // Bamboo panelinden elle değiştirilen günler (source = panel) korunur; DIKIDI onları ezmez
+    const { data: manual } = all.length ? await db.from("staff_day_hours").select("staff_id, day").in("staff_id", all).gte("day", first).lte("day", last).eq("source", "panel") : { data: [] };
+    const keep = new Set((manual ?? []).map((m) => `${m.staff_id}|${m.day}`));
     if (all.length) {
-      const { error } = await db.from("staff_day_hours").delete().in("staff_id", all).gte("day", first).lte("day", last);
+      const { error } = await db.from("staff_day_hours").delete().in("staff_id", all).gte("day", first).lte("day", last).neq("source", "panel");
       if (error) return json({ error: error.message }, 500);
     }
-    if (rows.length) { const { error } = await db.from("staff_day_hours").insert(rows); if (error) return json({ error: error.message }, 500); }
+    const ins = rows.filter((r) => !keep.has(`${r.staff_id}|${r.day}`));
+    if (ins.length) { const { error } = await db.from("staff_day_hours").insert(ins); if (error) return json({ error: error.message }, 500); }
     if (all.length) await db.from("staff").update({ schedule_mode: "daily" }).in("id", all);
     return json({ ok: true, report: { month: ym, rows: rows.length, staff: touched.size, unmatched } });
   }

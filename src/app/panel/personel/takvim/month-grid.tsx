@@ -26,7 +26,7 @@ export function MonthGrid(props: { days: string[]; today: string; staff: St[]; r
   const [err, setErr] = useState("");
 
   const hours = (s: St, d: string): string[] => {
-    if (s.mode === "daily") return props.rows.filter((r) => r.staff_id === s.id && r.day === d).sort((a, b) => a.start_time.localeCompare(b.start_time)).map((r) => `${short(r.start_time)}–${short(r.end_time)}`);
+    if (s.mode === "daily") return props.rows.filter((r) => r.staff_id === s.id && r.day === d && r.end_time > "00:01").sort((a, b) => a.start_time.localeCompare(b.start_time)).map((r) => `${short(r.start_time)}–${short(r.end_time)}`);
     const mine = props.weekly.filter((r) => r.staff_id === s.id);
     if (!mine.length) return props.salon.days.includes(wdOf(d)) ? [`${short(props.salon.open)}–${short(props.salon.close)}`] : [];
     return mine.filter((r) => r.weekday === wdOf(d)).map((r) => `${short(r.start_time)}–${short(r.end_time)}`);

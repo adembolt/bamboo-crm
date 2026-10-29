@@ -181,7 +181,8 @@ export async function setDayHours(input: { staffIds: string[]; days: string[]; r
   }
   const { error: delErr } = await supabase.from("staff_day_hours").delete().in("staff_id", input.staffIds).in("day", days);
   if (delErr) return { ok: false as const, error: delErr.message };
-  const rows = input.staffIds.flatMap((sid) => days.flatMap((day) => ranges.map((r) => ({ staff_id: sid, day, start_time: r.start, end_time: r.end, source: "panel" }))));
+  // "Çalışmıyor" da elle verilmiş karardır: 00:00–00:01 işaret satırı (çalışma penceresi sayılmaz, DIKIDI eşitlemesi bu günü ezmez)
+  const rows = input.staffIds.flatMap((sid) => days.flatMap((day) => (ranges.length ? ranges : [{ start: "00:00", end: "00:01" }]).map((r) => ({ staff_id: sid, day, start_time: r.start, end_time: r.end, source: "panel" }))));
   if (rows.length) { const { error } = await supabase.from("staff_day_hours").insert(rows); if (error) return { ok: false as const, error: error.message }; }
   revalidatePath("/panel/personel"); revalidatePath("/panel/takvim");
   return { ok: true as const };
