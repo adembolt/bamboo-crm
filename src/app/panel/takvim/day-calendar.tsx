@@ -319,7 +319,7 @@ export function DayCalendar(props: {
                     onClick={() => { if (suppressClick.current) return; setSelectedVisit(it.visit_id); }}
                     onPointerDown={(e) => beginDrag(e, it, "move")}
                     onContextMenu={(e) => { e.preventDefault(); setMenuErr(""); setMenu({ x: Math.min(e.clientX, window.innerWidth - 230), y: Math.min(e.clientY, window.innerHeight - 330), it }); }}
-                    className={`absolute left-1 right-1 rounded-lg text-left px-2 py-1 overflow-hidden shadow-card border select-none ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${isDragged && drag.mode === "move" ? "opacity-40" : ""}`}
+                    className={`absolute left-1 right-1 rounded-lg text-left px-2 py-1 overflow-hidden shadow-card border select-none flex flex-col justify-start items-stretch gap-px ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${isDragged && drag.mode === "move" ? "opacity-40" : ""}`}
                     style={{
                       top, height: hh, zIndex: isDragged ? 15 : undefined,
                       background: it.status === "no_show" ? "var(--bad-bg)" : it.visit.color ? `color-mix(in srgb, ${it.visit.color} 45%, var(--surface))` : it.status === "completed" || it.status === "arrived" ? "var(--good-bg)" : it.status === "pending" ? "var(--warn-bg)" : "var(--surface)",
