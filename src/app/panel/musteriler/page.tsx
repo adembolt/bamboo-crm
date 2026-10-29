@@ -122,7 +122,7 @@ export default async function CustomersPage({ searchParams }: PageProps<"/panel/
                       <span className="w-9 h-9 rounded-full bg-green-soft text-green grid place-items-center text-sm font-bold flex-none">{initials(c.first_name, c.last_name)}</span>
                       <span className="min-w-0">
                         <span className="font-semibold block truncate">{fullName(c)}</span>
-                        <span className="text-xs text-muted">{c.phone || t("telefon yok")} · {c.locale.toUpperCase()}{c.tags?.length ? ` · ${c.tags.join(", ")}` : ""}</span>
+                        <span className="text-xs text-muted">{c.phone || t("telefon yok")} · {c.locale.toUpperCase()}{(() => { const tg = (c.tags ?? []).filter((x) => x.toUpperCase() !== c.locale.toUpperCase()); return tg.length ? ` · ${tg.join(", ")}` : ""; })()}</span>
                       </span>
                     </Link>
                   </td>
