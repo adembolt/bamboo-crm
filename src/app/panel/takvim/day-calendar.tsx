@@ -31,6 +31,10 @@ export function DayCalendar(props: {
 }) {
   const { date, staff, items, settings, canWrite } = props;
   const t = useT();
+  const lang = useLang();
+  const svcById = useMemo(() => new Map(props.services.map((s) => [s.id, s])), [props.services]);
+  // kayıtlı ad Türkçe; başka dilde katalogdaki çeviri gösterilir
+  const svcName = (it: { service_id: string | null; service_name: string }) => { const s = lang !== "tr" && it.service_id ? svcById.get(it.service_id) : undefined; return s ? localName(s, lang) : it.service_name; };
   const openMin = toMin(settings.open_time);
   const closeMin = toMin(settings.close_time);
   const totalMin = closeMin - openMin;
@@ -163,12 +167,12 @@ export function DayCalendar(props: {
                       backgroundPosition: "bottom", backgroundRepeat: "no-repeat",
                       borderColor: col.color, borderLeftWidth: 4,
                     }}
-                    title={`${fmtTime(it.starts_at)}–${fmtTime(it.ends_at)} ${it.service_name}`}
+                    title={`${fmtTime(it.starts_at)}–${fmtTime(it.ends_at)} ${svcName(it)}`}
                   >
                     <div className="text-[12px] font-bold truncate leading-tight">
                       {c ? fullName(c) : t("Müşteri yok")} {multi && <span className="pill gold ml-1 px-1.5 py-0 text-[10px]">{t("çoklu")}</span>}
                     </div>
-                    <div className="text-[11px] text-muted truncate leading-tight">{fmtTime(it.starts_at)} · {it.service_name}</div>
+                    <div className="text-[11px] text-muted truncate leading-tight">{fmtTime(it.starts_at)} · {svcName(it)}</div>
                   </button>
                 );
               })}
