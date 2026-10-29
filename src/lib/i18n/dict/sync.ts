@@ -128,5 +128,17 @@ const d: Record<string, [string, string]> = {
   "Çalışmıyor yap": ["Set day off", "Сделать выходным"],
   "Önce hizmeti seçin, boş saatleri görün": ["Pick a service first, then see free times", "Сначала выберите услугу, затем свободное время"],
   "Çalışma takvimi": ["Work schedule", "График работы"],
+  "Bir hizmete kabin atanınca aynı saatte o kabine ikinci randevu verilmez (kapasite kadar). Kabin atanmamış hizmetlerde kontrol yapılmaz.": ["When a service has a cabin, that cabin can't be double-booked at the same time (up to its capacity). Services without a cabin are not checked.", "Если услуге назначен кабинет, его нельзя занять дважды в одно время (в пределах вместимости). Услуги без кабинета не проверяются."],
+  "Bu kabini kullanan kategoriler": ["Categories using this cabin", "Категории, использующие этот кабинет"],
+  "Bu saatte kabin dolu: {name}": ["The cabin is busy at this time: {name}", "Кабинет занят в это время: {name}"],
+  "Cihaz": ["Device", "Аппарат"],
+  "Henüz hizmet atanmadı": ["No services assigned yet", "Услуги ещё не назначены"],
+  "Henüz kabin yok. DIKIDI'de 2 kabin vardı: masaj kabini ve kozmetolog kabini.": ["No cabins yet. DIKIDI had 2: massage cabin and cosmetologist cabin.", "Кабинетов пока нет. В DIKIDI было 2: массажный и косметологический."],
+  "Kabin": ["Cabin", "Кабинет"],
+  "Kabin / cihaz ekle": ["Add cabin / device", "Добавить кабинет / аппарат"],
+  "Kabinler ve cihazlar": ["Cabins & devices", "Кабинеты и аппараты"],
+  "Kapasite": ["Capacity", "Вместимость"],
+  "kısmen": ["partly", "частично"],
+  "ör. Masaj kabini": ["e.g. Massage cabin", "напр. Массажный кабинет"],
 };
 export default d;

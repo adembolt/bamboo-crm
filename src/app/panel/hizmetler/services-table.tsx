@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useMemo, useState, useTransition, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import type { Service, ServiceCategory } from "@/lib/database.types";
@@ -49,7 +50,8 @@ export function ServicesTable(props: { categories: ServiceCategory[]; services: 
           <h1 className="text-xl font-bold">{t("Hizmetler")}</h1>
           <p className="text-sm text-muted">{t("{n} aktif hizmet", { n: activeCount })} · <b className="text-green">{onlineCount}</b> {t("tanesi online randevuda görünüyor")}</p>
         </div>
-        {canManage && <button className="btn ml-auto" onClick={() => setEdit("new")}>+ {t("Yeni hizmet")}</button>}
+        <Link className="btn ghost sm ml-auto" href="/panel/hizmetler/kaynaklar">🚪 {t("Kabinler ve cihazlar")}</Link>
+        {canManage && <button className="btn" onClick={() => setEdit("new")}>+ {t("Yeni hizmet")}</button>}
       </header>
 
       <div className="panel grid gap-3">

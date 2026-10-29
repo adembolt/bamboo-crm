@@ -58,6 +58,12 @@ export async function getSlots(opts: { serviceId: string; staffId: string | null
   const openMin = toMin(settings.open_time), closeMin = toMin(settings.close_time);
   const nowMin = opts.date === today ? minutesOfDay(new Date().toISOString()) + (panel ? 0 : settings.online_min_notice_minutes) : -1;
 
+  // Kabin: hizmete atanmış kaynaklardan en az biri o aralıkta boş olmalı
+  const { data: links } = await db.from("service_resources").select("resource_id, resource:resources(capacity, is_active)").eq("service_id", service.id);
+  const rooms = ((links ?? []) as unknown as { resource_id: string; resource: { capacity: number; is_active: boolean } | null }[]).filter((l) => l.resource?.is_active).map((l) => ({ id: l.resource_id, cap: Math.max(1, l.resource!.capacity) }));
+  const { data: roomBusy } = rooms.length ? await db.from("visit_items").select("resource_id, starts_at, ends_at").in("resource_id", rooms.map((r) => r.id)).gte("starts_at", dayStart).lte("starts_at", dayEnd).not("status", "in", "(cancelled,no_show)") : { data: [] };
+  const roomFree = (a: number, b: number) => !rooms.length || rooms.some((r) => (roomBusy ?? []).filter((x) => x.resource_id === r.id && minutesOfDay(x.starts_at) < b && minutesOfDay(x.ends_at) > a).length < r.cap);
+
   const slots = new Map<string, string[]>();
   for (const sid of candidates) {
     const mode = (staffRows ?? []).find((x) => x.id === sid)?.schedule_mode;
@@ -72,7 +78,7 @@ export async function getSlots(opts: { serviceId: string; staffId: string | null
       for (let t = Math.ceil(ws / step) * step; t + need <= Math.min(we, closeMin); t += step) {
         if (t < openMin || t <= nowMin) continue;
         const clash = blocks.some(([a, b]) => t < b && t + need > a);
-        if (clash) continue;
+        if (clash || !roomFree(t, t + need)) continue;
         const key = hhmm(t);
         slots.set(key, [...(slots.get(key) ?? []), sid]);
       }

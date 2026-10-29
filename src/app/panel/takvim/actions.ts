@@ -4,6 +4,7 @@ import { requireOps } from "@/lib/auth";
 import { localToIso, normalizePhone } from "@/lib/format";
 import type { VisitStatus } from "@/lib/database.types";
 import { getT } from "@/lib/i18n/server";
+import { pickResource } from "@/lib/resources";
 
 type Result = { ok: true; visitId: string; itemId: string } | { ok: false; error: string };
 
@@ -39,6 +40,11 @@ export async function addVisitItem(input: NewItemInput): Promise<Result> {
     if (ov?.duration_override) service.duration_min = ov.duration_override;
     if (ov?.price_override !== null && ov?.price_override !== undefined) service.price = ov.price_override;
   }
+
+  const startsAt = localToIso(input.date, input.startHHMM);
+  const endsAt = new Date(new Date(startsAt).getTime() + (service.duration_min + service.buffer_min) * 60000).toISOString();
+  const room = await pickResource(supabase, service.id, startsAt, endsAt);
+  if (!room.ok) return { ok: false, error: t("Bu saatte kabin dolu: {name}", { name: room.names }) };
 
   // Müşteri
   let customerId = input.customerId ?? null;
@@ -87,8 +93,6 @@ export async function addVisitItem(input: NewItemInput): Promise<Result> {
     visitId = v.id;
   }
 
-  const startsAt = localToIso(input.date, input.startHHMM);
-  const endsAt = new Date(new Date(startsAt).getTime() + (service.duration_min + service.buffer_min) * 60000).toISOString();
 
   const { data: item, error } = await supabase
     .from("visit_items")
@@ -99,6 +103,7 @@ export async function addVisitItem(input: NewItemInput): Promise<Result> {
       staff_id: input.staffId,
       starts_at: startsAt,
       ends_at: endsAt,
+      resource_id: room.resourceId,
       price: input.price ?? Number(service.price),
       notes: input.notes ?? "",
       status: "confirmed",
@@ -162,14 +167,16 @@ export async function deleteItem(itemId: string) {
 export async function moveItem(itemId: string, date: string, startHHMM: string, staffId: string | null) {
   const { supabase } = await requireOps();
   const t = await getT();
-  const { data: item } = await supabase.from("visit_items").select("starts_at, ends_at, visit_id").eq("id", itemId).single();
+  const { data: item } = await supabase.from("visit_items").select("starts_at, ends_at, visit_id, service_id, resource_id").eq("id", itemId).single();
   if (!item) return { ok: false as const, error: t("Kalem bulunamadı.") };
   const { count } = await supabase.from("sales").select("id", { count: "exact", head: true }).eq("visit_id", item.visit_id);
   if (count) return { ok: false as const, error: t("Ödemesi alınmış randevu taşınamaz. Önce kasadan satışı iptal edin.") };
   const dur = new Date(item.ends_at).getTime() - new Date(item.starts_at).getTime();
   const startsAt = localToIso(date, startHHMM);
   const endsAt = new Date(new Date(startsAt).getTime() + dur).toISOString();
-  const { error } = await supabase.from("visit_items").update({ starts_at: startsAt, ends_at: endsAt, staff_id: staffId }).eq("id", itemId);
+  const room = await pickResource(supabase, item.service_id, startsAt, endsAt, itemId, item.resource_id);
+  if (!room.ok) return { ok: false as const, error: t("Bu saatte kabin dolu: {name}", { name: room.names }) };
+  const { error } = await supabase.from("visit_items").update({ starts_at: startsAt, ends_at: endsAt, staff_id: staffId, resource_id: room.resourceId ?? item.resource_id }).eq("id", itemId);
   if (error) {
     return { ok: false as const, error: error.message.includes("overlap") ? t("O saatte personel dolu.") : error.message };
   }
@@ -183,12 +190,14 @@ export async function resizeItem(itemId: string, durationMin: number) {
   const { supabase } = await requireOps();
   const t = await getT();
   if (!(durationMin >= 5 && durationMin <= 12 * 60)) return { ok: false as const, error: t("Süre geçersiz.") };
-  const { data: item } = await supabase.from("visit_items").select("starts_at, visit_id").eq("id", itemId).single();
+  const { data: item } = await supabase.from("visit_items").select("starts_at, visit_id, service_id, resource_id").eq("id", itemId).single();
   if (!item) return { ok: false as const, error: t("Kalem bulunamadı.") };
   const { count } = await supabase.from("sales").select("id", { count: "exact", head: true }).eq("visit_id", item.visit_id);
   if (count) return { ok: false as const, error: t("Ödemesi alınmış randevu değiştirilemez. Önce kasadan satışı iptal edin.") };
   const endsAt = new Date(new Date(item.starts_at).getTime() + durationMin * 60000).toISOString();
-  const { error } = await supabase.from("visit_items").update({ ends_at: endsAt }).eq("id", itemId);
+  const room = await pickResource(supabase, item.service_id, item.starts_at, endsAt, itemId, item.resource_id);
+  if (!room.ok) return { ok: false as const, error: t("Bu saatte kabin dolu: {name}", { name: room.names }) };
+  const { error } = await supabase.from("visit_items").update({ ends_at: endsAt, resource_id: room.resourceId ?? item.resource_id }).eq("id", itemId);
   if (error) return { ok: false as const, error: error.message.includes("overlap") ? t("O saatte personel dolu.") : error.message };
   revalidatePath("/panel/takvim");
   return { ok: true as const };
