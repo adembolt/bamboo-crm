@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { money } from "@/lib/format";
 import { ProductsUI } from "./products-ui";
@@ -27,6 +28,7 @@ export default async function ProductsPage({ searchParams }: PageProps<"/panel/u
     <div className="grid gap-4">
       <header className="flex items-center gap-3 flex-wrap">
         <h1 className="text-xl font-bold">{t("Ürünler & stok")}</h1>
+        <Link className="btn ghost sm ml-auto" href="/panel/urunler/tedarikciler">{t("Tedarikçiler ve depolar")}</Link>
       </header>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Kpi label={t("Aktif ürün")} value={String(active.length)} sub={t("{n} satışta", { n: active.filter((p) => p.is_retail).length })} />

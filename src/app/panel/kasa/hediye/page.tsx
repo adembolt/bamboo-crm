@@ -10,6 +10,9 @@ export default async function GiftCardsPage() {
   const { supabase, profile } = await requireSession();
   const t = await getT();
   const canWrite = !!profile && ["owner", "manager", "reception"].includes(profile.role);
+  const { data: tpls } = await supabase.from("gift_card_templates").select("id, name, usage, amount, open_amount, valid_days, bonus_percent, sale_from, sale_to").eq("is_active", true).order("amount");
+  const today = new Date().toISOString().slice(0, 10);
+  const templates = (tpls ?? []).filter((x) => (!x.sale_from || x.sale_from <= today) && (!x.sale_to || x.sale_to >= today)).map((x) => ({ ...x, amount: Number(x.amount), bonus_percent: Number(x.bonus_percent) }));
   const { data: cards } = await supabase.from("gift_cards").select("*, customer:customers(first_name, last_name), uses:gift_card_uses(amount, created_at)").order("created_at", { ascending: false }).limit(200);
   const list = cards ?? [];
   const open = list.filter((c) => Number(c.balance) > 0);
@@ -21,7 +24,7 @@ export default async function GiftCardsPage() {
         <h1 className="text-xl font-bold">{t("Hediye çekleri")}</h1>
         <span className="text-sm text-muted">{t("{n} açık çek · bakiye toplamı", { n: open.length })} <b className="text-ink">{money(outstanding)}</b></span>
       </header>
-      {canWrite && <GiftCardForm />}
+      {canWrite && <GiftCardForm templates={templates} />}
       <section className="panel overflow-x-auto">
         <table className="w-full text-sm min-w-[640px]">
           <thead className="text-[11px] uppercase tracking-wide text-muted bg-sunk"><tr><th className="text-left px-3 py-2">{t("Kod")}</th><th className="text-left px-3 py-2">{t("Alan / müşteri")}</th><th className="text-right px-3 py-2">{t("Tutar")}</th><th className="text-right px-3 py-2">{t("Bakiye")}</th><th className="text-left px-3 py-2">{t("Satış")}</th><th className="text-left px-3 py-2">{t("Son kullanma")}</th><th className="text-left px-3 py-2">{t("Kullanım")}</th></tr></thead>

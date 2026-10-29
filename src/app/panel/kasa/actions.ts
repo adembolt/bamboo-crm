@@ -222,7 +222,7 @@ export async function adjustPackage(id: string, patch: { used_sessions?: number;
 }
 
 /** Hediye çeki satışı */
-export async function sellGiftCard(input: { amount: number; buyerName: string; customerId: string | null; expiresAt: string | null; saleDate: string; payments: { method: PayMethod; amount: number }[]; notes?: string }) {
+export async function sellGiftCard(input: { amount: number; buyerName: string; customerId: string | null; expiresAt: string | null; saleDate: string; payments: { method: PayMethod; amount: number }[]; notes?: string; templateId?: string | null }) {
   const { supabase, user } = await requireOps();
   const t = await getT();
   if (!(input.amount > 0)) return { ok: false as const, error: t("Tutar gerekli.") };
@@ -233,10 +233,16 @@ export async function sellGiftCard(input: { amount: number; buyerName: string; c
   await supabase.from("sale_items").insert({ sale_id: sale.id, kind: "gift_card", name: "Hediye çeki", staff_id: null, qty: 1, unit_price: input.amount, discount: 0, total: input.amount });
   const pays = input.payments.filter((p) => Number(p.amount) > 0).map((p) => ({ sale_id: sale.id, method: p.method, amount: Number(p.amount) }));
   if (pays.length) await supabase.from("sale_payments").insert(pays);
+  // Şablondan satışta bonus: ör. 10.000 ₺ öde, %15 bonusla 11.500 ₺ çek
+  let face = input.amount; let templateName = "";
+  if (input.templateId) {
+    const { data: tpl } = await supabase.from("gift_card_templates").select("name, bonus_percent").eq("id", input.templateId).maybeSingle();
+    if (tpl) { face = Math.round(input.amount * (1 + Number(tpl.bonus_percent) / 100) * 100) / 100; templateName = tpl.name; }
+  }
   let code = ""; let tries = 0;
   while (tries++ < 5) {
     code = "BB-" + Math.random().toString(36).slice(2, 6).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
-    const { error: e } = await supabase.from("gift_cards").insert({ code, initial_amount: input.amount, balance: input.amount, buyer_name: input.buyerName.trim(), customer_id: input.customerId, sale_id: sale.id, expires_at: input.expiresAt, notes: input.notes ?? "", created_by: user.id });
+    const { error: e } = await supabase.from("gift_cards").insert({ code, initial_amount: face, balance: face, buyer_name: input.buyerName.trim(), customer_id: input.customerId, sale_id: sale.id, expires_at: input.expiresAt, notes: [templateName, input.notes ?? ""].filter(Boolean).join(" · "), template_id: input.templateId ?? null, created_by: user.id });
     if (!e) break; if (tries >= 5) return { ok: false as const, error: e.message };
   }
   revalidatePath("/panel/kasa"); revalidatePath("/panel/kasa/hediye");
