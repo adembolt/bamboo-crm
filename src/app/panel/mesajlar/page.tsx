@@ -86,7 +86,8 @@ export default async function MessagesPage({ searchParams }: PageProps<"/panel/m
         {(kind === "reminder" || kind === "thanks") && (
           <span className="flex items-center gap-1"><Link className="btn ghost sm" href={q(kind, addDays(d, -1))}>‹</Link><b className="min-w-[110px] text-center">{fmtDate(d)}</b><Link className="btn ghost sm" href={q(kind, addDays(d, 1))}>›</Link></span>
         )}
-        {isManager && <Link className="btn ghost sm ml-auto" href="/panel/ayarlar/whatsapp">{t("WhatsApp bağlantısı")} →</Link>}
+        {isManager && <Link className="btn sm ml-auto" href="/panel/mesajlar/kampanya">📣 {t("Kampanyalar")}</Link>}
+        {isManager && <Link className="btn ghost sm" href="/panel/ayarlar/whatsapp">{t("WhatsApp bağlantısı")} →</Link>}
         {isManager && <Link className="btn ghost sm" href="#sablonlar">{t("Şablonları düzenle")}</Link>}
       </header>
       <p className="text-sm text-muted -mt-2">{t("{hint}. WhatsApp'ta aç → mesaj hazır gelir, siz göndermeye basarsınız; ardından “Gönderildi” işaretleyin.", { hint: t(info.hint) })}</p>

@@ -91,6 +91,7 @@ export default async function CustomersPage({ searchParams }: PageProps<"/panel/
           </select></span>
           <button className="btn ghost" type="submit">{t("Ara")}</button>
           <Link className="btn ghost" href="/panel/musteriler/yorumlar">★ {t("Yorumlar")}</Link>
+          <Link className="btn ghost" href="/panel/musteriler/tutma">↻ {t("Müşteri tutma")}</Link>
           {canExport && <a className="btn ghost" href={`/panel/musteriler/export?${new URLSearchParams({ ...(q ? { q } : {}), ...(f ? { f } : {}) }).toString()}`}>⬇ {t("Excel (CSV)")}</a>}
         </form>
       </header>

@@ -166,7 +166,7 @@ export async function addExpense(_prev: { error: string }, formData: FormData) {
     created_by: user.id,
   });
   if (error) return { error: error.message };
-  revalidatePath("/panel/kasa");
+  revalidatePath("/panel/kasa", "layout");
   return { error: "" };
 }
 

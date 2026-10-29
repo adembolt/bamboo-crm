@@ -9,6 +9,7 @@ import hours from "./hours";
 import crm from "./crm";
 import wa from "./wa";
 import sync from "./sync";
+import growth from "./growth";
 import overrides from "./overrides";
 
-export const DICT: Record<string, [string, string]> = { ...admin, ...clients, ...kasa, ...visit, ...calendar, ...hours, ...crm, ...wa, ...sync, ...common, ...overrides };
+export const DICT: Record<string, [string, string]> = { ...admin, ...clients, ...kasa, ...visit, ...calendar, ...hours, ...crm, ...wa, ...sync, ...growth, ...common, ...overrides };

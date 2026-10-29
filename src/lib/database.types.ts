@@ -17,7 +17,7 @@ export type Settings = {
   slot_minutes: number; open_time: string; close_time: string; open_days: number[];
   online_booking_enabled: boolean; online_requires_approval: boolean; online_min_notice_minutes: number;
   online_max_days_ahead: number; online_cancel_limit_minutes: number; kdv_rate: number;
-  whatsapp_number: string; instagram_url: string; google_review_url: string; import_token: string; loyalty_earn_percent: number; loyalty_point_value: number; loyalty_max_pay_percent: number; referral_inviter_points: number; referral_invitee_discount: number; package_default_months: number; updated_at: string;
+  whatsapp_number: string; instagram_url: string; google_review_url: string; import_token: string; loyalty_earn_percent: number; loyalty_point_value: number; loyalty_max_pay_percent: number; payroll_start: string; referral_inviter_points: number; referral_invitee_discount: number; package_default_months: number; updated_at: string;
 };
 
 export type ServiceCategory = {
@@ -95,6 +95,8 @@ export type StaffPayScheme = {
   booking_service_percent: number; booking_product_percent: number; booking_exclude_own: boolean;
   daily_wage: number; daily_guarantee: number; notes: string; dikidi_id: string | null; created_at: string;
 };
+export type StaffAdjustment = { id: string; staff_id: string; adj_date: string; amount: number; note: string; created_by: string | null; created_at: string };
+export type Campaign = { id: string; name: string; segment: Record<string, unknown>; body_tr: string; body_en: string; body_ru: string; created_by: string | null; created_at: string };
 export type CashAccount = { id: string; name: string; kind: "cash" | "bank"; opening_balance: number; opening_date: string; sort_order: number; is_active: boolean; created_at: string };
 export type CashAdjustment = { id: string; account_id: string; adj_date: string; amount: number; note: string; created_by: string | null; created_at: string };
 export type SyncRun = { id: string; source: string; started_at: string; finished_at: string | null; range_from: string | null; range_to: string | null; report: Record<string, unknown>; ok: boolean };
@@ -170,6 +172,8 @@ export type Database = {
       sale_items: Tbl<SaleItem, "visit_item_id" | "product_id" | "kind" | "staff_id" | "qty" | "unit_price" | "discount" | "total" | "material_cost" | "dikidi_pay" | "staff_name", [R<"sale_items_sale_id_fkey","sale_id","sales">, R<"sale_items_staff_id_fkey","staff_id","staff">, R<"sale_items_visit_item_id_fkey","visit_item_id","visit_items">]>;
       staff_payouts: Tbl<StaffPayout, "method" | "notes" | "paid_at" | "created_by" | "dikidi_id", [R<"staff_payouts_staff_id_fkey","staff_id","staff">]>;
       staff_pay_schemes: Tbl<StaffPayScheme, Exclude<keyof StaffPayScheme, "staff_id" | "valid_from">, [R<"staff_pay_schemes_staff_id_fkey","staff_id","staff">]>;
+      staff_adjustments: Tbl<StaffAdjustment, "adj_date" | "note" | "created_by", [R<"staff_adjustments_staff_id_fkey","staff_id","staff">]>;
+      campaigns: Tbl<Campaign, "segment" | "body_tr" | "body_en" | "body_ru" | "created_by">;
       cash_accounts: Tbl<CashAccount, Exclude<keyof CashAccount, "name" | "kind">>;
       cash_adjustments: Tbl<CashAdjustment, "adj_date" | "note" | "created_by", [R<"cash_adjustments_account_id_fkey","account_id","cash_accounts">]>;
       sync_runs: Tbl<SyncRun, Exclude<keyof SyncRun, "id">>;
