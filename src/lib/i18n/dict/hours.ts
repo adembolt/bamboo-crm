@@ -58,5 +58,11 @@ const d: Record<string, [string, string]> = {
   "Taşı": ["Move", "Перенести"],
   "Süre": ["Duration", "Длительность"],
   "Uzman": ["Specialist", "Мастер"],
+  "Sağ paneli gizle": ["Hide side panel", "Скрыть боковую панель"],
+  "Sağ paneli göster": ["Show side panel", "Показать боковую панель"],
+  "Bu ziyarette birden fazla hizmet var": ["This visit has several services", "В этом визите несколько услуг"],
+  "Gelmeme sayısı: {n}": ["No-shows: {n}", "Неявок: {n}"],
+  "Ödendi": ["Paid", "Оплачено"],
+  "Online randevu": ["Online booking", "Онлайн-запись"],
 };
 export default d;

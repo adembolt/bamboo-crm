@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Staff } from "@/lib/database.types";
 import type { DayItem } from "@/lib/queries/calendar";
-import { minutesOfDay, hhmm, money, fmtTime, fullName, duration } from "@/lib/format";
+import { minutesOfDay, hhmm, money, fmtTime, fullName, duration, todayIso } from "@/lib/format";
 import { addVisitItem, moveItem, resizeItem, type NewItemInput } from "./actions";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
 import { VisitEditor } from "./visit-editor";
@@ -54,6 +54,23 @@ export function DayCalendar(props: {
     if (!staffId) return true; const h = hoursOf.get(staffId); return !h || isWorking(startMin, startMin + dur, h.w, h.o);
   };
   const [selectedVisit, setSelectedVisit] = useState<string | null>(null);
+  // şimdiki saat çizgisi (yalnızca bugün) + açılışta o saate kaydır
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [nowMin, setNowMin] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNowMin(date === todayIso() ? minutesOfDay(new Date().toISOString()) : null);
+    const first = setTimeout(() => {
+      tick();
+      const el = scrollRef.current;
+      if (el) {
+        const target = date === todayIso() ? minutesOfDay(new Date().toISOString()) - 60 : Math.min(...items.filter((i) => i.status !== "cancelled").map((i) => minutesOfDay(i.starts_at)), closeMin) - 30;
+        el.scrollTop = Math.max(0, (target - openMin) * PX_PER_MIN);
+      }
+    }, 0);
+    const iv = setInterval(tick, 60000);
+    return () => { clearTimeout(first); clearInterval(iv); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [hiddenLoaded, setHiddenLoaded] = useState(false);
   useEffect(() => {
@@ -177,17 +194,17 @@ export function DayCalendar(props: {
         </span>
         {hiddenLoaded && hiddenWithItems.length > 0 && <span className="w-full text-[11px] text-warn">{t("Gizli ama bugün randevusu olan: {names}", { names: hiddenWithItems.map((s) => s.full_name).join(", ") })}</span>}
       </div>
-      <div className="overflow-x-auto lg:overflow-x-visible">
-        <div className="min-w-[640px] lg:min-w-0" style={{ display: "grid", gridTemplateColumns: `46px repeat(${columns.length}, minmax(0, 1fr))` }}>
+      <div ref={scrollRef} className="overflow-auto max-h-[calc(100dvh-150px)] min-h-[420px] overscroll-contain">
+        <div style={{ display: "grid", gridTemplateColumns: `46px repeat(${columns.length}, minmax(${columns.length > 6 ? 96 : 120}px, 1fr))` }}>
           {/* başlıklar */}
-          <div className="sticky top-0 z-10 bg-surface border-b border-line" />
+          <div className="sticky top-0 left-0 z-30 bg-surface border-b border-line" />
           {columns.map((c) => (
-            <div key={c.id ?? "none"} className="sticky top-0 z-10 bg-surface border-b border-l border-line px-2 py-2 min-w-0" title={c.name}>
-              <div className="flex items-center gap-2">
-                {c.id ? <StaffAvatar staff={{ id: c.id, full_name: c.name, color: c.color, photo_url: c.photo }} size={34} editable={props.canManage} /> : <span className="w-2.5 h-2.5 rounded-full flex-none" style={{ background: c.color }} />}
-                <div className="min-w-0">
-                  <div className="font-semibold truncate text-sm">{c.name}</div>
-                  <div className="text-[11px] text-muted truncate">{c.title || t("{n} randevu", { n: c.items.length })}</div>
+            <div key={c.id ?? "none"} className="sticky top-0 z-20 bg-surface border-b border-l border-line px-1.5 py-2 min-w-0" title={`${c.name}${c.title ? " · " + c.title : ""}`}>
+              <div className="flex flex-col items-center text-center gap-1 min-w-0">
+                {c.id ? <StaffAvatar staff={{ id: c.id, full_name: c.name, color: c.color, photo_url: c.photo }} size={36} editable={props.canManage} /> : <span className="w-9 h-9 rounded-full flex-none grid place-items-center text-muted" style={{ background: "var(--sunk)" }}>?</span>}
+                <div className="min-w-0 w-full leading-tight">
+                  <div className="font-semibold truncate text-[13px]">{c.name}</div>
+                  <div className="text-[10px] text-muted truncate">{c.title || t("{n} randevu", { n: c.items.length })}</div>
                   {c.id && (() => { const h = hoursOf.get(c.id); if (!h) return null; const txt = h.fullOff ? t("İzinli") : !h.w.length ? t("Çalışmıyor") : h.w.map(([a, b]) => `${hhmm(a)}–${hhmm(b)}`).join(", "); return <div className={`text-[10px] num truncate ${h.working ? "text-muted" : "text-warn font-semibold"}`}>{txt}</div>; })()}
                 </div>
               </div>
@@ -195,7 +212,8 @@ export function DayCalendar(props: {
           ))}
 
           {/* saat ekseni */}
-          <div className="relative border-r border-line" style={{ height: totalMin * PX_PER_MIN }}>
+          <div className="relative border-r border-line sticky left-0 z-10 bg-surface" style={{ height: totalMin * PX_PER_MIN }}>
+            {nowMin !== null && nowMin >= openMin && nowMin <= closeMin && <div className="absolute right-0 px-1 text-[10px] font-bold text-white rounded-l -translate-y-1/2 z-10" style={{ top: (nowMin - openMin) * PX_PER_MIN, background: "var(--bad)" }}>{hhmm(nowMin)}</div>}
             {Array.from({ length: Math.floor(totalMin / GRID_MIN) + 1 }, (_, i) => openMin + i * GRID_MIN).map((m) => (
               <div key={m} className={`absolute left-0 right-0 px-2 -translate-y-1/2 ${m % 60 === 0 ? "text-[11px] text-muted font-semibold" : m % 30 === 0 ? "text-[10px] text-muted/80" : "text-[9px] text-muted/50"}`} style={{ top: (m - openMin) * PX_PER_MIN }}>
                 {m % 60 === 0 || m % 30 === 0 ? hhmm(m) : `:${String(m % 60).padStart(2, "0")}`}
@@ -231,6 +249,7 @@ export function DayCalendar(props: {
                   {hhmm(drag.curMin)}–{hhmm(drag.curMin + drag.dur)}{!workCheck(drag.curStaff, drag.curMin, drag.dur) && <span className="text-warn"> · {t("çalışma saati dışı")}</span>}
                 </div>
               )}
+              {nowMin !== null && nowMin >= openMin && nowMin <= closeMin && <div aria-hidden className="absolute left-0 right-0 h-0.5 z-[5] pointer-events-none" style={{ top: (nowMin - openMin) * PX_PER_MIN, background: "var(--bad)" }} />}
               {col.items.map((it) => {
                 const a = minutesOfDay(it.starts_at), b = minutesOfDay(it.ends_at);
                 const top = (a - openMin) * PX_PER_MIN, h = Math.max(22, (b - a) * PX_PER_MIN - 2);
@@ -254,12 +273,20 @@ export function DayCalendar(props: {
                       backgroundPosition: "bottom", backgroundRepeat: "no-repeat",
                       borderColor: col.color, borderLeftWidth: 4,
                     }}
-                    title={`${fmtTime(it.starts_at)}–${fmtTime(it.ends_at)} ${svcName(it)}`}
+                    title={[`${c ? fullName(c) : t("Müşteri yok")}${c?.phone ? " · " + c.phone : ""}`, `${fmtTime(it.starts_at)}–${fmtTime(it.ends_at)} · ${svcName(it)}`, `${t(STATUS_LABEL[it.status])}${it.price ? " · " + money(Number(it.price) - Number(it.discount || 0)) : ""}`, it.visit.notes || it.notes || ""].filter(Boolean).join("\n")}
                   >
-                    <div className="text-[12px] font-bold truncate leading-tight">
-                      {c ? fullName(c) : t("Müşteri yok")} {multi && <span className="pill gold ml-1 px-1.5 py-0 text-[10px]">{t("çoklu")}</span>}
+                    <div className="text-[12px] font-bold leading-tight flex items-start gap-1 min-w-0">
+                      <StatusDot status={it.status} t={t} />
+                      <span className={hh >= 56 ? "line-clamp-2 break-words" : "truncate"}>{c ? fullName(c) : t("Müşteri yok")}</span>
                     </div>
-                    <div className="text-[11px] text-muted truncate leading-tight">{isDragged && drag.mode === "resize" ? `${fmtTime(it.starts_at)}–${hhmm(a + drag.curDur)} · ${duration(drag.curDur, lang)}` : `${fmtTime(it.starts_at)} · ${svcName(it)}`}</div>
+                    <div className="text-[11px] num leading-tight truncate opacity-80">
+                      {isDragged && drag.mode === "resize" ? `${fmtTime(it.starts_at)}–${hhmm(a + drag.curDur)} · ${duration(drag.curDur, lang)}` : `${fmtTime(it.starts_at)}–${fmtTime(it.ends_at)}`}
+                      {it.visit.source === "online" && <span title={t("Online randevu")}> · 🌐</span>}
+                      {(it.notes || it.visit.notes) && <span title={it.visit.notes || it.notes}> · ✎</span>}
+                      {multi && <span title={t("Bu ziyarette birden fazla hizmet var")}> · ⧉</span>}
+                      {(c?.no_show_count ?? 0) > 0 && <span className="text-bad" title={t("Gelmeme sayısı: {n}", { n: c!.no_show_count })}> · ⚠{c!.no_show_count}</span>}
+                    </div>
+                    {hh >= 44 && <div className={`text-[11px] text-muted leading-tight ${hh >= 80 ? "line-clamp-3" : hh >= 60 ? "line-clamp-2" : "truncate"}`}>{svcName(it)}</div>}
                     {canDrag && <span aria-hidden onPointerDown={(e) => beginDrag(e, it, "resize")} className="absolute left-0 right-0 bottom-0 h-1.5 cursor-ns-resize" title={t("Süreyi değiştirmek için sürükleyin")} />}
                   </button>
                 );
@@ -475,4 +502,18 @@ export function Modal({ title, children, onClose }: { title: string; children: R
       </div>
     </div>
   );
+}
+
+const STATUS_LABEL: Record<string, string> = { pending: "Onay bekliyor", confirmed: "Onaylandı", arrived: "Geldi", completed: "Ödendi", no_show: "Gelmedi", cancelled: "İptal" };
+const STATUS_STYLE: Record<string, { ch: string; bg: string; fg: string }> = {
+  pending: { ch: "?", bg: "var(--warn-bg)", fg: "var(--warn)" },
+  confirmed: { ch: "✓", bg: "var(--sunk)", fg: "var(--ink)" },
+  arrived: { ch: "●", bg: "var(--good-bg)", fg: "var(--good)" },
+  completed: { ch: "₺", bg: "var(--good)", fg: "#fff" },
+  no_show: { ch: "✕", bg: "var(--bad-bg)", fg: "var(--bad)" },
+  cancelled: { ch: "–", bg: "var(--sunk)", fg: "var(--muted)" },
+};
+function StatusDot({ status, t }: { status: string; t: (s: string) => string }) {
+  const st = STATUS_STYLE[status] ?? STATUS_STYLE.confirmed;
+  return <span title={t(STATUS_LABEL[status] ?? status)} aria-label={t(STATUS_LABEL[status] ?? status)} className="flex-none w-3.5 h-3.5 mt-px rounded-full grid place-items-center text-[9px] font-black leading-none" style={{ background: st.bg, color: st.fg }}>{st.ch}</span>;
 }

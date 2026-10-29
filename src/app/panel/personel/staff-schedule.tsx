@@ -91,9 +91,9 @@ export function StaffScheduleDialog({ staffId, staffName, rows, offs, openTime, 
                         {!on && <span className="text-sm text-muted">{t("Çalışmıyor")}</span>}
                         {days[d].map((iv, k) => (
                           <span key={k} className="inline-flex items-center gap-1">
-                            <span className="inp w-[96px]"><input type="time" step={900} value={iv.start} onChange={(e) => setIv(d, k, { start: e.target.value })} aria-label={t("Başlangıç")} /></span>
+                            <span className="inp w-[118px]"><input type="time" step={900} value={iv.start} onChange={(e) => setIv(d, k, { start: e.target.value })} aria-label={t("Başlangıç")} /></span>
                             <span className="text-muted">–</span>
-                            <span className="inp w-[96px]"><input type="time" step={900} value={iv.end} onChange={(e) => setIv(d, k, { end: e.target.value })} aria-label={t("Bitiş")} /></span>
+                            <span className="inp w-[118px]"><input type="time" step={900} value={iv.end} onChange={(e) => setIv(d, k, { end: e.target.value })} aria-label={t("Bitiş")} /></span>
                             {days[d].length > 1 && <button type="button" className="btn ghost sm px-1.5" aria-label={t("Aralığı kaldır")} onClick={() => setDays((x) => ({ ...x, [d]: x[d].filter((_, j) => j !== k) }))}>✕</button>}
                           </span>
                         ))}

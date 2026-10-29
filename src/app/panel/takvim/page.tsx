@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { loadDay, loadServicesForPicker } from "@/lib/queries/calendar";
 import { todayIso, addDays, fmtDateLong } from "@/lib/format";
 import { DayCalendar } from "./day-calendar";
+import { CalendarShell } from "./calendar-shell";
 import { MiniCalendar, KasaSnapshot } from "./side-panel";
 import { loadKasaDay, summarize } from "@/lib/queries/kasa";
 import { getT, getLang } from "@/lib/i18n/server";
@@ -41,7 +42,10 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           <span className="inp"><input type="date" name="d" defaultValue={d} /></span>
         </form>
       </header>
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_240px] gap-3 items-start">
+      <CalendarShell side={<>
+          <MiniCalendar date={d} busyDays={busyDays} />
+          <KasaSnapshot date={d} gross={sum.gross} byMethod={sum.byMethod} expected={sum.expected} openCount={kasa.visits.filter((v) => !v.sale).length} closedCount={kasa.visits.filter((v) => v.sale).length + kasa.otherSales.length} />
+        </>}>
         <DayCalendar
           date={d}
           staff={day.staff}
@@ -55,11 +59,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
           canManage={!!profile && ["owner", "manager"].includes(profile.role)}
           canWrite={canWrite}
         />
-        <aside className="grid gap-3 lg:sticky lg:top-3 min-w-0">
-          <MiniCalendar date={d} busyDays={busyDays} />
-          <KasaSnapshot date={d} gross={sum.gross} byMethod={sum.byMethod} expected={sum.expected} openCount={kasa.visits.filter((v) => !v.sale).length} closedCount={kasa.visits.filter((v) => v.sale).length + kasa.otherSales.length} />
-        </aside>
-      </div>
+      </CalendarShell>
     </div>
   );
 }
