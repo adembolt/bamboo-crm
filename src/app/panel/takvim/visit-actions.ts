@@ -13,7 +13,7 @@ export async function getVisitDetail(visitId: string) {
   const { supabase } = await requireOps();
   const t = await getT();
   const { data: v } = await supabase.from("visits")
-    .select("id, visit_date, status, source, notes, color, is_anonymous, remind_offsets, remind_confirm, review_request, promo_code, discount_percent, created_at, customer:customers(id, first_name, last_name, phone, email, notes, health_notes, no_show_count, balance, loyalty_points, tags, locale), items:visit_items(id, service_id, service_name, staff_id, starts_at, ends_at, price, discount, status, break_min, package_id, service:services(duration_min))")
+    .select("id, visit_date, status, source, notes, color, is_anonymous, remind_offsets, remind_confirm, review_request, promo_code, discount_percent, created_at, customer:customers(id, first_name, last_name, phone, email, notes, health_notes, health_flags, no_show_count, balance, loyalty_points, tags, locale), items:visit_items(id, service_id, service_name, staff_id, starts_at, ends_at, price, discount, status, break_min, package_id, service:services(duration_min))")
     .eq("id", visitId).single();
   if (!v) return { ok: false as const, error: t("Ziyaret bulunamadı.") };
   const cid = v.customer?.id;
@@ -24,6 +24,7 @@ export async function getVisitDetail(visitId: string) {
     supabase.from("audit_log").select("action, diff, created_at, actor_id").eq("entity", "visit").eq("entity_id", visitId).order("created_at", { ascending: false }).limit(30),
     supabase.from("sales").select("id, total").eq("visit_id", visitId).maybeSingle(),
   ]);
+  const { data: cforms } = cid ? await supabase.from("client_forms").select("id, form_key, form_date, status, visit_id").eq("customer_id", cid).order("form_date", { ascending: false }).limit(60) : { data: [] };
   const signed = await Promise.all((files ?? []).map(async (f) => {
     const { data } = await supabase.storage.from("visit-files").createSignedUrl(f.storage_path, 3600);
     return { ...f, url: data?.signedUrl ?? null };
@@ -45,6 +46,7 @@ export async function getVisitDetail(visitId: string) {
     files: signed,
     audit: (audit ?? []).map((a) => ({ ...a, actor: actors?.find((x) => x.id === a.actor_id)?.full_name ?? "" })),
     sale: sale ? { id: sale.id, total: Number(sale.total) } : null,
+    forms: (cforms ?? []).map((f) => ({ id: f.id, key: f.form_key, date: f.form_date, status: f.status, visitId: f.visit_id })),
   };
 }
 

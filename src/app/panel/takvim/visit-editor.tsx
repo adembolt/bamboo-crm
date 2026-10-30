@@ -5,6 +5,7 @@ import type { Staff, VisitStatus } from "@/lib/database.types";
 import { Modal } from "@/components/modal";
 import { TopUpDialog } from "@/components/topup-dialog";
 import { ServiceCombobox } from "@/components/service-combobox";
+import { FormHints } from "./form-hints";
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
 import { createClient } from "@/lib/supabase/client";
 import { money, hhmm, fmtDate, fmtTime, todayIso, addDays, duration, minLabel } from "@/lib/format";
@@ -271,6 +272,7 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
               </div>
             )}
             {c?.health_notes && !anon && <p className="text-xs rounded-lg bg-warn-bg px-2 py-1"><b>{t("Sağlık notu:")}</b> {c.health_notes}</p>}
+            {c && !anon && customer?.id === c.id && <FormHints customerId={c.id} visitId={visitId} flags={c.health_flags ?? []} forms={d.forms} services={lines.map((l) => l.serviceName)} />}
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={anon} disabled={locked} onChange={(e) => setAnon(e.target.checked)} /> {t("Anonim")}</label>
           </div>
           <div className="grid gap-2 content-start">

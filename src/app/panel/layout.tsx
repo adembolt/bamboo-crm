@@ -13,7 +13,7 @@ export default async function PanelLayout({ children }: LayoutProps<"/panel">) {
   return (
     <LangProvider lang={lang}>
     <div className="flex-1 flex flex-col md:flex-row min-h-0">
-      <aside className="md:w-44 md:flex-none md:border-r border-line bg-surface md:min-h-screen flex md:flex-col items-center md:items-stretch gap-3 px-3 py-2 md:py-4 border-b md:border-b-0">
+      <aside className="print:hidden md:w-44 md:flex-none md:border-r border-line bg-surface md:min-h-screen flex md:flex-col items-center md:items-stretch gap-3 px-3 py-2 md:py-4 border-b md:border-b-0">
         <Link href="/panel/takvim" className="flex items-center gap-2 md:px-2 md:mb-2 rounded-lg hover:bg-sunk" title={t("Takvime dön")} aria-label={`Bamboo Beauty & Wellness — ${t("Takvime dön")}`}>
           <BambooLogo size={36} />
           <div className="leading-tight hidden sm:block">

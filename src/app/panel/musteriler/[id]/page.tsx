@@ -7,6 +7,7 @@ import type { Customer } from "@/lib/database.types";
 import { PackagePanel, BalancePanel } from "./package-sale";
 import { getT } from "@/lib/i18n/server";
 import { NotesPanel, PhotoPanel } from "./extras";
+import { FormsPanel } from "./forms-panel";
 
 const VISIT_STATUS: Record<string, string> = { pending: "Onay bekliyor", confirmed: "Onaylı", arrived: "Geldi", completed: "Tamamlandı", no_show: "Gelmedi", cancelled: "İptal" };
 
@@ -17,7 +18,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
   const canWrite = !!profile && ["owner", "manager", "reception"].includes(profile.role);
   const isManager = !!profile && ["owner", "manager"].includes(profile.role);
 
-  const [{ data: c }, { data: visits }, { data: packages }, { data: services }, { data: staff }, { data: settings }, { data: ledger }, { data: bledger }, { data: notes }, { data: photos }, { data: vfiles }, { data: revs }] = await Promise.all([
+  const [{ data: c }, { data: visits }, { data: packages }, { data: services }, { data: staff }, { data: settings }, { data: ledger }, { data: bledger }, { data: notes }, { data: photos }, { data: vfiles }, { data: revs }, { data: cforms }, { data: csess }, { data: cguides }] = await Promise.all([
     supabase.from("customers").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("visits")
@@ -35,6 +36,9 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
     supabase.from("customer_photos").select("id, storage_path, kind, caption, taken_at").eq("customer_id", id).order("taken_at", { ascending: false }).limit(60),
     supabase.from("visit_files").select("id, storage_path, mime, file_name, created_at").eq("customer_id", id).like("mime", "image/%").order("created_at", { ascending: false }).limit(40),
     supabase.from("reviews").select("id, rating, body, source, created_at").eq("customer_id", id).order("created_at", { ascending: false }).limit(10),
+    supabase.from("client_forms").select("id, form_key, form_date, status, flags, staff_name, signed_at, visit_id, created_at").eq("customer_id", id).order("form_date", { ascending: false }).order("created_at", { ascending: false }).limit(100),
+    supabase.from("client_sessions").select("id, kind, session_date, fields, staff_name").eq("customer_id", id).order("session_date").limit(300),
+    supabase.from("care_guides_given").select("id, guide_key, given_at").eq("customer_id", id).order("given_at", { ascending: false }).limit(30),
   ]);
   if (!c) notFound();
   // fotoğraflar için geçici imzalı bağlantılar (özel depolama)
@@ -47,6 +51,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
     ...(vfiles ?? []).map((f, i) => ({ id: f.id, url: vf.data?.[i]?.signedUrl ?? "", kind: "other" as const, caption: f.file_name, taken_at: f.created_at.slice(0, 10), source: "visit" as const })),
   ].filter((p) => p.url).sort((a, b) => b.taken_at.localeCompare(a.taken_at));
   const customer = c as Customer;
+  const me = profile?.staff_id ? staff?.find((x) => x.id === profile.staff_id)?.full_name ?? "" : "";
 
   type V = NonNullable<typeof visits>[number];
   const vis = (visits ?? []) as V[];
@@ -65,6 +70,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
         <div className="min-w-0">
           <h1 className="text-xl font-bold">{fullName(customer)}</h1>
           <p className="text-sm text-muted">{customer.phone || t("telefon yok")}{customer.email ? ` · ${customer.email}` : ""}</p>
+          {(customer.health_flags ?? []).length > 0 && <p className="text-xs text-warn font-semibold">⚠ {customer.health_flags.join(" · ")}</p>}
         </div>
         <div className="ml-auto flex gap-2 flex-wrap">
           {customer.phone && <a className="btn ghost sm" href={`https://wa.me/${customer.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer">WhatsApp</a>}
@@ -81,6 +87,10 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
 
       <div className="grid md:grid-cols-[1fr_1.2fr] gap-4 items-start">
         <div className="grid gap-4">
+        <FormsPanel customerId={id} phone={customer.phone} firstName={customer.first_name} locale={customer.locale} flags={customer.health_flags ?? []}
+          forms={(cforms ?? []).map((f) => ({ id: f.id, form_key: f.form_key, form_date: f.form_date, status: f.status, flags: f.flags ?? [], staff_name: f.staff_name, signed: !!f.signed_at, visit_id: f.visit_id }))}
+          sessions={(csess ?? []).map((x) => ({ ...x, fields: (x.fields ?? {}) as Record<string, string> }))} guides={cguides ?? []}
+          staffNames={(staff ?? []).map((x) => x.full_name)} me={me} canDeleteSessions={canWrite} />
         <section className="panel grid gap-3">
           <h2 className="text-lg font-bold">{t("Müşteri kartı")}</h2>
           <CustomerEditForm customer={customer} canWrite={canWrite} />

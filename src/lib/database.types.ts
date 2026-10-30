@@ -50,7 +50,7 @@ export type Customer = {
   birth_date: string | null; locale: string; nationality: string; source: string; tags: string[];
   notes: string; health_notes: string; consent_marketing: boolean; consent_at: string | null;
   is_blocked: boolean; no_show_count: number; discount_percent: number; balance: number; dikidi_id: string | null; loyalty_points: number;
-  card_no: string; dikidi_source: string; referred_by: string | null;
+  card_no: string; dikidi_source: string; referred_by: string | null; health_flags: string[];
 } & Timestamps;
 
 export type Visit = {
@@ -111,6 +111,13 @@ export type Product = {
 export type Review = { id: string; customer_id: string | null; author_name: string; staff_id: string | null; rating: number; body: string; reply: string; is_public: boolean; source: string; dikidi_id: string | null; created_at: string; visit_id: string | null; handled: boolean };
 export type CustomerNote = { id: string; customer_id: string; body: string; created_by: string | null; created_at: string };
 export type CustomerPhoto = { id: string; customer_id: string; storage_path: string; caption: string; taken_at: string; created_at: string; kind: "before" | "after" | "other"; visit_id: string | null; created_by: string | null };
+export type ClientForm = {
+  id: string; customer_id: string; visit_id: string | null; form_key: string; form_date: string; status: "pending" | "signed" | "completed";
+  data: Record<string, unknown>; signatures: { client?: string; staff?: string }; flags: string[]; staff_name: string; staff_id: string | null;
+  token: string | null; lang: string; signed_at: string | null; created_by: string | null; created_at: string; updated_at: string;
+};
+export type ClientSession = { id: string; customer_id: string; visit_id: string | null; kind: string; session_date: string; fields: Record<string, string>; staff_name: string; created_by: string | null; created_at: string };
+export type CareGuideGiven = { id: string; customer_id: string; visit_id: string | null; guide_key: string; given_at: string; created_by: string | null; created_at: string };
 export type GiftCardTemplate = { id: string; name: string; usage: "service" | "product" | "both"; amount: number; open_amount: boolean; valid_days: number; bonus_percent: number; sale_from: string | null; sale_to: string | null; sale_limit: number; online: boolean; is_active: boolean; created_at: string };
 export type Supplier = { id: string; name: string; phone: string; notes: string; dikidi_name: string | null; created_at: string };
 export type Warehouse = { id: string; name: string; responsible_staff_id: string | null; is_active: boolean; dikidi_name: string | null; created_at: string };
@@ -165,6 +172,9 @@ export type Database = {
       staff_day_hours: { Row: { staff_id: string; day: string; start_time: string; end_time: string; source: string }; Insert: { staff_id: string; day: string; start_time: string; end_time: string; source?: string }; Update: Partial<{ staff_id: string; day: string; start_time: string; end_time: string; source: string }>; Relationships: [] };
       service_resources: { Row: { service_id: string; resource_id: string }; Insert: { service_id: string; resource_id: string }; Update: Partial<{ service_id: string; resource_id: string }>; Relationships: [] };
       customers: Tbl<Customer, Exclude<keyof Customer, "first_name">>;
+      client_forms: Tbl<ClientForm, "visit_id" | "form_date" | "status" | "data" | "signatures" | "flags" | "staff_name" | "staff_id" | "token" | "lang" | "signed_at" | "created_by", [R<"client_forms_customer_id_fkey","customer_id","customers">, R<"client_forms_visit_id_fkey","visit_id","visits">]>;
+      client_sessions: Tbl<ClientSession, "visit_id" | "session_date" | "fields" | "staff_name" | "created_by", [R<"client_sessions_customer_id_fkey","customer_id","customers">]>;
+      care_guides_given: Tbl<CareGuideGiven, "visit_id" | "given_at" | "created_by", [R<"care_guides_given_customer_id_fkey","customer_id","customers">]>;
       customer_notes: Tbl<CustomerNote, "created_by", [R<"customer_notes_customer_id_fkey","customer_id","customers">, R<"customer_notes_created_by_fkey","created_by","profiles">]>;
       customer_photos: Tbl<CustomerPhoto, "caption" | "taken_at" | "kind" | "visit_id" | "created_by", [R<"customer_photos_customer_id_fkey","customer_id","customers">]>;
       visits: Tbl<Visit, Exclude<keyof Visit, "visit_date">, [R<"visits_customer_id_fkey","customer_id","customers">]>;
