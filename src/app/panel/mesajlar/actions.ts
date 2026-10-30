@@ -2,6 +2,8 @@
 import { revalidatePath } from "next/cache";
 import { requireManager, requireOps } from "@/lib/auth";
 import { getT } from "@/lib/i18n/server";
+import { BRAND_VOICE_RULES, DEFAULT_TEMPLATES } from "@/lib/brand-voice";
+import type { MsgKind, MsgLocale } from "@/lib/messages";
 
 export async function markSent(input: { customerId: string | null; visitId: string | null; kind: string; body: string }) {
   const { supabase, user } = await requireOps();
@@ -36,9 +38,23 @@ export async function personalize(input: { customerId: string | null; kind: stri
   const lang = input.locale === "ru" ? "Russian" : input.locale === "tr" ? "Turkish" : "English";
   const hist = (visits ?? []).map((v) => `${v.visit_date} (${v.status}): ${v.items.map((i) => `${i.service_name}${i.staff?.full_name ? " / " + i.staff.full_name.split(" ")[1] : ""}`).join(", ")}`).join("\n") || "none";
   const pkgs = (pk ?? []).map((p) => `${p.name}: ${p.total_sessions - p.used_sessions} sessions left${p.expires_at ? `, expires ${p.expires_at}` : ""}`).join("\n") || "none";
-  const system = `You write short WhatsApp messages for ${st?.business_name || "Bamboo Beauty Lifes"}, a premium beauty & wellness salon in Marmaris, Turkey (always "beauty salon" / "Beauty & Wellness"; never call it a spa or a hairdresser).
-Rules: write ONLY the message text, in ${lang}; warm, personal, professional; 2–4 sentences, max ~350 characters; at most one emoji; address the customer by first name; keep every concrete fact from the draft (date, time, services, links) exactly; you may add one relevant personal touch from the history (e.g. remaining package sessions, a natural next treatment) but never invent prices, discounts or medical claims; no hashtags, no signature line.`;
+  const system = `You rewrite a WhatsApp message for ${st?.business_name || "Bamboo Beauty Lifes"} so it feels personal to this customer. Write ONLY the message text, in ${lang}.
+${BRAND_VOICE_RULES}
+Personalisation: address the customer by first name; keep every concrete fact from the draft (date, time, services, specialist, links) exactly; you may add one relevant personal touch from the history (e.g. remaining package sessions, a natural next step) as its own short paragraph; keep it concise (about 4–6 short paragraphs in total). No hashtags.`;
   const user = `Message type: ${input.kind}\nCustomer: ${c.first_name} ${c.last_name}\nRecent visits:\n${hist}\nActive packages:\n${pkgs}\nPrepaid balance: ${Number(c.balance) > 0 ? c.balance + " TRY" : "none"}\n\nDraft to personalise:\n${input.draft}`;
-  const r = await complete({ system, user, maxTokens: 350 });
+  const r = await complete({ system, user, maxTokens: 700 });
   return r.ok ? { ok: true as const, text: r.text.replace(/^["“]|["”]$/g, "") } : { ok: false as const, error: r.error };
+}
+
+/** Tüm şablonları Bamboo üslubundaki varsayılanlarla değiştirir */
+export async function resetTemplates(kind?: string) {
+  const { supabase } = await requireManager();
+  const rows: { kind: string; locale: string; body: string; updated_at: string }[] = [];
+  for (const [k, byLoc] of Object.entries(DEFAULT_TEMPLATES) as [MsgKind, Record<MsgLocale, string>][]) {
+    if (kind && k !== kind) continue;
+    for (const [l, body] of Object.entries(byLoc)) rows.push({ kind: k, locale: l, body, updated_at: new Date().toISOString() });
+  }
+  const { error } = await supabase.from("message_templates").upsert(rows);
+  revalidatePath("/panel/mesajlar");
+  return error ? { ok: false as const, error: error.message } : { ok: true as const };
 }

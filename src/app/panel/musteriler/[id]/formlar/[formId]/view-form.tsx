@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FormFiller } from "@/components/forms/form-filler";
 import { useT } from "@/lib/i18n/client";
+import { brandMessage } from "@/lib/brand-voice";
 import type { FormKey, FormData, Signatures } from "@/lib/forms/schemas";
 import { updateFormStaff, deleteClientForm, cancelFormLink } from "../actions";
 
@@ -22,7 +23,7 @@ export function ViewForm({ formId, customerId, formKey, status, data, sig, staff
   const [msg, setMsg] = useState("");
 
   if (link) {
-    const text = t("Merhaba {ad}, randevunuzdan önce formu buradan doldurup imzalayabilirsiniz: {link}", { ad: name, link });
+    const text = brandMessage("tr", { greet: `Merhaba ${name} 🌸`, body: [`Randevunuzdan önce sizin için kısa bir form hazırladık; birkaç dakikada doldurup telefonunuzdan imzalayabilirsiniz ✨\n${link}`, "Bilgileriniz yalnızca işleminizin güvenli ve size özel planlanması için kullanılır 💚"], ask: "Sorunuz olursa bu mesaja yazmanız yeterli." });
     return (
       <section className="panel grid gap-3">
         <p className="text-sm">{t("Bu form danışanın kendi telefonundan doldurulacak. Bağlantıyı WhatsApp ile gönderin; doldurduğunda burada imzalı olarak görünür.")}</p>

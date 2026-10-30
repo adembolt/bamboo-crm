@@ -7,6 +7,8 @@ import { useT } from "@/lib/i18n/client";
 import { fmtDate, todayIso } from "@/lib/format";
 import { FORMS, FORM_KEYS, SESSIONS, GUIDES, type FormKey } from "@/lib/forms/schemas";
 import { guideText } from "@/lib/forms/guide";
+import { brandMessage } from "@/lib/brand-voice";
+import type { MsgLocale } from "@/lib/messages";
 import { createFormLink, addClientSession, deleteClientSession, recordGuide } from "./formlar/actions";
 import { waLink } from "./formlar/[formId]/view-form";
 
@@ -100,12 +102,13 @@ function LinkDialog({ customerId, phone, firstName, locale, onClose }: { custome
   const [res, setRes] = useState<{ url: string } | null>(null);
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
-  const MSG: Record<string, string> = {
-    tr: "Merhaba {ad}, Bamboo Beauty Lifes. Randevunuzdan önce formu buradan doldurup imzalayabilirsiniz: {link}",
-    en: "Hello {ad}, this is Bamboo Beauty Lifes. Please fill in and sign your form before your appointment: {link}",
-    ru: "Здравствуйте, {ad}! Это Bamboo Beauty Lifes. Пожалуйста, заполните и подпишите анкету перед визитом: {link}",
+  const MSG: Record<string, { greet: string; body: string[]; ask: string }> = {
+    tr: { greet: "Merhaba {ad} 🌸", body: ["Randevunuzdan önce sizin için kısa bir form hazırladık; birkaç dakikada doldurup telefonunuzdan imzalayabilirsiniz ✨\n{link}", "Bilgileriniz yalnızca işleminizin güvenli ve size özel planlanması için kullanılır 💚"], ask: "Sorunuz olursa bu mesaja yazmanız yeterli." },
+    en: { greet: "Hello {ad} 🌸", body: ["Before your appointment, we've prepared a short form for you — it takes just a few minutes to fill in and sign on your phone ✨\n{link}", "Your information is used only to plan your treatment safely and just for you 💚"], ask: "If you have any questions, simply reply to this message." },
+    ru: { greet: "Здравствуйте, {ad} 🌸", body: ["Перед визитом мы подготовили для вас короткую анкету — её можно заполнить и подписать на телефоне за несколько минут ✨\n{link}", "Ваши данные используются только для безопасного и индивидуального планирования процедуры 💚"], ask: "Если появятся вопросы, просто ответьте на это сообщение." },
   };
-  const text = res ? MSG[lang].replace("{ad}", firstName).replace("{link}", res.url) : "";
+  const m = MSG[lang] ?? MSG.tr;
+  const text = res ? brandMessage(lang as MsgLocale, { greet: m.greet.replace("{ad}", firstName), body: m.body.map((b) => b.replace("{link}", res.url)), ask: m.ask }) : "";
   return (
     <Modal title={t("Danışana bağlantı gönder")} onClose={onClose}>
       <div className="grid gap-3">

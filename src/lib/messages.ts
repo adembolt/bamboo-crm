@@ -25,8 +25,21 @@ export function pickLocale(c: { locale?: string | null; phone?: string | null; n
 
 export type Fill = { ad: string; tarih?: string; saat?: string; hizmetler?: string; personel?: string; toplam?: string; salon: string; yorum_link?: string; son_ziyaret?: string };
 
+/** Değişkenleri doldurur; paragraf düzenini (satır sonlarını) korur.
+    Değeri boş kalan değişkenin bulunduğu satır (ör. "• Uzmanınız: {personel}") tamamen çıkarılır. */
 export function fill(template: string, f: Fill) {
-  return template.replace(/\{(\w+)\}/g, (m, k: string) => (f as Record<string, string | undefined>)[k] ?? m).replace(/\s{2,}/g, " ").trim();
+  const vals = f as Record<string, string | undefined>;
+  const lines = template.replace(/\r\n/g, "\n").split("\n").flatMap((line) => {
+    let empty = false;
+    const out = line.replace(/\{(\w+)\}/g, (m, k: string) => {
+      if (!(k in vals)) return m;
+      const v = (vals[k] ?? "").trim();
+      if (!v) empty = true;
+      return v;
+    });
+    return empty ? [] : [out.replace(/[ \t]{2,}/g, " ").trimEnd()];
+  });
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export function waLink(phone: string, text: string) {

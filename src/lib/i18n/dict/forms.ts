@@ -35,6 +35,23 @@ const ui: Record<string, [string, string]> = {
   "Karta işlendi": ["Recorded on card", "Записано в карту"],
   "{f} eksik — doldur": ["{f} missing — fill in", "{f} нет — заполнить"],
   "{f}: danışan bekleniyor": ["{f}: waiting for client", "{f}: ожидаем клиента"],
+  "Bamboo kalıbıyla başla": ["Start with the Bamboo layout", "Начать с шаблона Bamboo"],
+  "Bamboo üslubuna uygun": ["Matches the Bamboo style", "Соответствует стилю Bamboo"],
+  "Bamboo üslubunu yükle": ["Load Bamboo style", "Загрузить стиль Bamboo"],
+  "Bamboo WhatsApp üslubu": ["Bamboo WhatsApp style", "Стиль WhatsApp Bamboo"],
+  "🌸 selamlama → teşekkür / bilgi (kısa paragraflar, aralarda boş satır; liste için •, öneriler için ✨) → nazik soru → imza.": ["🌸 greeting → thanks / information (short paragraphs with blank lines; • for lists, ✨ for options) → gentle question → signature.", "🌸 приветствие → благодарность / информация (короткие абзацы через пустую строку; • для списков, ✨ для предложений) → мягкий вопрос → подпись."],
+  "En az 3 emoji, yalnızca 🌸 ✨ 💚 🌿. Son satır her zaman “Bamboo Beauty Lifes 🌿”. “Anladık” kullanılmaz; HIFU, botoks, dolgu şablonlarda geçmez.": ["At least 3 emojis, only 🌸 ✨ 💚 🌿. The last line is always “Bamboo Beauty Lifes 🌿”. Never “Anladık”; HIFU, botox and fillers are not mentioned in templates.", "Минимум 3 эмодзи, только 🌸 ✨ 💚 🌿. Последняя строка всегда «Bamboo Beauty Lifes 🌿». Без «Anladık»; HIFU, ботокс и филлеры в шаблонах не упоминаются."],
+  "Değeri boş kalan değişkenin satırı mesajdan çıkarılır (ör. uzman yoksa “Uzmanınız” satırı).": ["A line whose variable is empty is removed (e.g. the “Your specialist” line when no specialist).", "Строка с пустой переменной удаляется (например, «Ваш специалист», если мастер не указан)."],
+  "Önizleme": ["Preview", "Предпросмотр"],
+  "Tüm şablonlar Bamboo üslubundaki varsayılanlarla değiştirilsin mi?": ["Replace all templates with the Bamboo-style defaults?", "Заменить все шаблоны стандартными в стиле Bamboo?"],
+  "Tüm şablonlar güncellendi": ["All templates updated", "Все шаблоны обновлены"],
+  "Tümünü varsayılana döndür": ["Reset all to defaults", "Сбросить все к стандартным"],
+  "Son satır “Bamboo Beauty Lifes 🌿” olmalı": ["The last line must be “Bamboo Beauty Lifes 🌿”", "Последняя строка должна быть «Bamboo Beauty Lifes 🌿»"],
+  "En az 3 marka emojisi (🌸 ✨ 💚 🌿)": ["At least 3 brand emojis (🌸 ✨ 💚 🌿)", "Минимум 3 эмодзи бренда (🌸 ✨ 💚 🌿)"],
+  "Kısa paragraflara bölün (aralarda boş satır)": ["Split into short paragraphs (blank lines between)", "Разбейте на короткие абзацы (с пустыми строками)"],
+  "Çok uzun paragraf var": ["A paragraph is too long", "Слишком длинный абзац"],
+  "“Anladık” yerine daha sıcak bir ifade kullanın": ["Use a warmer phrase instead of “Anladık”", "Используйте более тёплую фразу вместо «Anladık»"],
+  "HIFU / botoks / dolgu şablonda geçmemeli (Adem onayı gerekir)": ["HIFU / botox / fillers should not appear in templates (needs Adem's approval)", "HIFU / ботокс / филлеры не должны быть в шаблонах (нужно согласие Адема)"],
 };
 
 const content: Record<string, [string, string]> = {};

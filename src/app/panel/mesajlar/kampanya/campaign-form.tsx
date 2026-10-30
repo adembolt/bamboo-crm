@@ -2,6 +2,9 @@
 import { useState, useTransition } from "react";
 import { useT } from "@/lib/i18n/client";
 import { saveCampaign, translateCampaign, type Segment } from "./actions";
+import { StyleHints } from "../template-editor";
+
+const STARTER = "Merhaba {ad} 🌸\n\n(kısa teşekkür / giriş cümlesi) 💚\n\n✨ (kampanya / öneri)\n\n(nazik soru: size uygun bir gün ayarlayalım mı?)\n\nSevgilerimizle,\nBamboo Beauty Lifes 🌿";
 
 type Cat = { id: string; name: string };
 export type CampaignInit = { id?: string | null; name: string; segment: Segment; body_tr: string; body_en: string; body_ru: string };
@@ -45,10 +48,14 @@ export function CampaignForm({ init, categories, counts }: { init: CampaignInit;
       <fieldset className="grid gap-2 border border-line rounded-xl p-3">
         <legend className="text-sm font-bold px-1">{t("Mesaj")}</legend>
         <p className="text-xs text-muted">{t("{ad} müşterinin adıyla, {salon} salon adıyla değişir. Her müşteriye kendi dilindeki metin gider.")}</p>
-        <label className="f">TR<textarea className="inp min-h-[110px] p-2" value={f.body_tr} onChange={(e) => setF({ ...f, body_tr: e.target.value })} placeholder={t("Merhaba {ad}, …")} /></label>
+        <label className="f">TR<textarea className="inp min-h-[200px] p-2" value={f.body_tr} onChange={(e) => setF({ ...f, body_tr: e.target.value })} placeholder={t("Merhaba {ad}, …")} /></label>
+        {!f.body_tr.trim() && <button type="button" className="btn ghost sm justify-self-start" onClick={() => setF({ ...f, body_tr: STARTER })}>🌿 {t("Bamboo kalıbıyla başla")}</button>}
+        <StyleHints text={f.body_tr} locale="tr" />
         <button type="button" className="btn ghost sm justify-self-start" disabled={busy || !f.body_tr.trim()} onClick={tr}>{busy ? t("Yazılıyor…") : `✨ ${t("İngilizce ve Rusçasını Claude yazsın")}`}</button>
-        <label className="f">EN<textarea className="inp min-h-[110px] p-2" value={f.body_en} onChange={(e) => setF({ ...f, body_en: e.target.value })} /></label>
-        <label className="f">RU<textarea className="inp min-h-[110px] p-2" value={f.body_ru} onChange={(e) => setF({ ...f, body_ru: e.target.value })} /></label>
+        <label className="f">EN<textarea className="inp min-h-[200px] p-2" value={f.body_en} onChange={(e) => setF({ ...f, body_en: e.target.value })} /></label>
+        <StyleHints text={f.body_en} locale="en" />
+        <label className="f">RU<textarea className="inp min-h-[200px] p-2" value={f.body_ru} onChange={(e) => setF({ ...f, body_ru: e.target.value })} /></label>
+        <StyleHints text={f.body_ru} locale="ru" />
       </fieldset>
       {err && <p className="pill bad">{err}</p>}
       <button className="btn justify-self-start" disabled={pending || !f.name.trim() || !seg.langs.length} onClick={save}>{t("Kaydet ve alıcıları göster")}</button>

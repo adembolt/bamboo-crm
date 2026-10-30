@@ -1,4 +1,5 @@
 "use server";
+import { BRAND_VOICE_RULES } from "@/lib/brand-voice";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireManager } from "@/lib/auth";
@@ -26,8 +27,9 @@ export async function translateCampaign(tr: string) {
   await requireManager();
   const { complete } = await import("@/lib/ai");
   if (!tr.trim()) return { ok: false as const, error: "Önce Türkçe metni yazın." };
-  const system = `You translate short WhatsApp marketing messages for Bamboo Beauty Lifes, a premium beauty & wellness salon in Marmaris, Turkey (never call it a spa or hairdresser).
-Return JSON only: {"en": "...", "ru": "..."}. Keep the same meaning, tone, emojis, line breaks, prices, dates and links exactly; keep placeholders like {ad} and {salon} unchanged; natural native wording, not literal.`;
+  const system = `You translate WhatsApp marketing messages for Bamboo Beauty Lifes from Turkish into English and Russian.
+${BRAND_VOICE_RULES}
+Return JSON only: {"en": "...", "ru": "..."}. Keep the same meaning, paragraph breaks (\\n\\n), bullets, emojis, prices, dates and links exactly; keep placeholders like {ad} and {salon} unchanged; natural native wording, not literal. If the Turkish text breaks the style rules (e.g. missing the "Bamboo Beauty Lifes 🌿" last line), still follow the rules in the translations.`;
   const r = await complete({ system, user: tr, maxTokens: 1200 });
   if (!r.ok) return { ok: false as const, error: r.error };
   try { const j = JSON.parse(r.text.slice(r.text.indexOf("{"), r.text.lastIndexOf("}") + 1)); return { ok: true as const, en: String(j.en ?? ""), ru: String(j.ru ?? "") }; }

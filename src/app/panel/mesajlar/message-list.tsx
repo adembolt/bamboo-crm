@@ -37,7 +37,7 @@ export function MessageList({ rows, kind }: { rows: MsgRow[]; kind: string }) {
               <div className="font-bold flex items-center gap-2 flex-wrap">{r.name} <span className="text-muted font-normal">· {r.phone}</span> <span className="pill">{r.locale.toUpperCase()}</span> {r.blocked && <span className="pill" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>{t("engelli")}</span>}</div>
               <div className="text-sm text-muted">{r.meta}</div>
               <button type="button" className="text-left text-sm text-ink/80 bg-sunk rounded-lg px-3 py-2 whitespace-pre-wrap" onClick={() => setOpen(open === r.id ? null : r.id)} aria-expanded={open === r.id}>
-                {ai[r.id] && <span className="text-[10px] font-bold text-gold mr-1">✨ {t("kişisel")}</span>}{open === r.id ? bodyOf(r) : bodyOf(r).slice(0, 110) + (bodyOf(r).length > 110 ? "…" : "")}
+                {ai[r.id] && <span className="text-[10px] font-bold text-gold mr-1">✨ {t("kişisel")}</span>}{open === r.id ? bodyOf(r) : bodyOf(r).replace(/\s+/g, " ").slice(0, 120) + (bodyOf(r).length > 120 ? "…" : "")}
               </button>
               {aiErr[r.id] && <div className="text-xs text-bad">{aiErr[r.id]}</div>}
               {at && <div className="text-xs text-good">{t("Gönderildi")} · {fmtDate(at)} {fmtTime(at)}</div>}
