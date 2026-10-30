@@ -218,7 +218,7 @@ function BodyMap({ value, ro, tx, onChange }: { value: Mark[]; ro: boolean; tx: 
           {MARKS.map((m, i) => (
             <button type="button" key={i} aria-pressed={tool === i} onClick={() => setTool(i)}
               className={`rounded-xl border px-3 py-1.5 text-sm ${tool === i ? "border-green bg-green-soft font-semibold" : "border-line"}`}>
-              <b style={{ color: m[2] }} className="mr-1">{m[0]}</b>{tx(m[1])}
+              <b style={{ color: m[2] === "#14261A" ? "var(--ink)" : m[2] }} className="mr-1">{m[0]}</b>{tx(m[1])}
             </button>
           ))}
         </div>
