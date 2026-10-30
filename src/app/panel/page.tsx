@@ -23,7 +23,7 @@ export default async function TodayPage() {
   const monthStart = d.slice(0, 8) + "01";
   const prevMonthStart = addDays(monthStart, -1).slice(0, 8) + "01";
   const prevSameDay = addDays(prevMonthStart, Number(d.slice(8)) - 1);
-  const [{ count: newReq }, { count: customers }, { data: tmr }, { data: unpaid }, { count: bdays }, { count: lost }, { data: prods }, { data: weekV }, { data: monthSales }, { data: prevSales }] = await Promise.all([
+  const [{ count: newReq }, { count: customers }, { data: tmr }, { data: unpaid }, { count: bdays }, { count: lost }, { data: prods }, { data: weekV }, { data: monthSales }, { data: prevSales }, { count: lowReviews }] = await Promise.all([
     supabase.from("booking_requests").select("id", { count: "exact", head: true }).eq("status", "new"),
     supabase.from("customers").select("id", { count: "exact", head: true }),
     supabase.from("visits").select("id, message_log(kind)").eq("visit_date", tomorrow).in("status", ["pending", "confirmed"]),
@@ -34,6 +34,7 @@ export default async function TodayPage() {
     supabase.from("visits").select("visit_date, items:visit_items(price, discount, status)").gte("visit_date", d).lte("visit_date", week7).neq("status", "cancelled"),
     supabase.from("sales").select("total").gte("sale_date", monthStart).lte("sale_date", d),
     supabase.from("sales").select("total").gte("sale_date", prevMonthStart).lte("sale_date", prevSameDay),
+    supabase.from("reviews").select("id", { count: "exact", head: true }).eq("source", "salon").lte("rating", 3).eq("handled", false),
   ]);
   const remindersDue = (tmr ?? []).filter((v) => !([] as { kind: string }[]).concat((v.message_log as unknown as { kind: string }[] | null) ?? []).some((m) => m.kind === "reminder")).length;
   const hasAny = (x: unknown) => (Array.isArray(x) ? x.length > 0 : !!x);
@@ -49,6 +50,7 @@ export default async function TodayPage() {
   });
   const maxN = Math.max(1, ...days.map((x) => x.n));
   const todos = [
+    lowReviews ? { icon: "★", text: t("{n} düşük puanlı değerlendirme ilgilenmenizi bekliyor", { n: lowReviews }), href: "/panel/musteriler/yorumlar?f=low", urgent: true } : null,
     newReq ? { icon: "⇅", text: t("{n} online randevu talebi onay bekliyor", { n: newReq }), href: "/panel/online", urgent: true } : null,
     remindersDue ? { icon: "✉", text: t("Yarın için {n} hatırlatma mesajı gönderilmedi", { n: remindersDue }), href: `/panel/mesajlar?k=reminder&d=${tomorrow}`, urgent: true } : null,
     unpaidList.length ? { icon: "₺", text: t("{n} geçmiş ziyaretin ödemesi alınmamış", { n: unpaidList.length }), href: `/panel/kasa?d=${unpaidList[0].visit_date}`, urgent: true } : null,

@@ -56,7 +56,7 @@ export type Customer = {
 export type Visit = {
   id: string; customer_id: string | null; visit_date: string; status: VisitStatus; source: VisitSource;
   notes: string; internal_notes: string; discount_percent: number; prepaid_amount: number; created_by: string | null; import_ref: string | null;
-  color: string; is_anonymous: boolean; remind_offsets: number[]; remind_confirm: boolean; review_request: string; promo_code: string;
+  color: string; is_anonymous: boolean; remind_offsets: number[]; remind_confirm: boolean; review_request: string; promo_code: string; review_token: string;
 } & Timestamps;
 
 export type VisitItem = {
@@ -108,7 +108,9 @@ export type Product = {
   stock_qty: number; min_stock: number; is_retail: boolean; is_active: boolean; notes: string;
   dikidi_id: string | null; use_price: number; material_qty: number; material_unit: string; last_purchase_at: string | null;
 } & Timestamps;
-export type Review = { id: string; customer_id: string | null; author_name: string; staff_id: string | null; rating: number; body: string; reply: string; is_public: boolean; source: string; dikidi_id: string | null; created_at: string };
+export type Review = { id: string; customer_id: string | null; author_name: string; staff_id: string | null; rating: number; body: string; reply: string; is_public: boolean; source: string; dikidi_id: string | null; created_at: string; visit_id: string | null; handled: boolean };
+export type CustomerNote = { id: string; customer_id: string; body: string; created_by: string | null; created_at: string };
+export type CustomerPhoto = { id: string; customer_id: string; storage_path: string; caption: string; taken_at: string; created_at: string; kind: "before" | "after" | "other"; visit_id: string | null; created_by: string | null };
 export type GiftCardTemplate = { id: string; name: string; usage: "service" | "product" | "both"; amount: number; open_amount: boolean; valid_days: number; bonus_percent: number; sale_from: string | null; sale_to: string | null; sale_limit: number; online: boolean; is_active: boolean; created_at: string };
 export type Supplier = { id: string; name: string; phone: string; notes: string; dikidi_name: string | null; created_at: string };
 export type Warehouse = { id: string; name: string; responsible_staff_id: string | null; is_active: boolean; dikidi_name: string | null; created_at: string };
@@ -163,6 +165,8 @@ export type Database = {
       staff_day_hours: { Row: { staff_id: string; day: string; start_time: string; end_time: string; source: string }; Insert: { staff_id: string; day: string; start_time: string; end_time: string; source?: string }; Update: Partial<{ staff_id: string; day: string; start_time: string; end_time: string; source: string }>; Relationships: [] };
       service_resources: { Row: { service_id: string; resource_id: string }; Insert: { service_id: string; resource_id: string }; Update: Partial<{ service_id: string; resource_id: string }>; Relationships: [] };
       customers: Tbl<Customer, Exclude<keyof Customer, "first_name">>;
+      customer_notes: Tbl<CustomerNote, "created_by", [R<"customer_notes_customer_id_fkey","customer_id","customers">, R<"customer_notes_created_by_fkey","created_by","profiles">]>;
+      customer_photos: Tbl<CustomerPhoto, "caption" | "taken_at" | "kind" | "visit_id" | "created_by", [R<"customer_photos_customer_id_fkey","customer_id","customers">]>;
       visits: Tbl<Visit, Exclude<keyof Visit, "visit_date">, [R<"visits_customer_id_fkey","customer_id","customers">]>;
       visit_items: Tbl<VisitItem, "service_id" | "staff_id" | "resource_id" | "price" | "discount" | "status" | "package_id" | "notes" | "break_min" | "dikidi_id" | "booked_by_staff_id", [R<"visit_items_visit_id_fkey","visit_id","visits">, R<"visit_items_staff_id_fkey","staff_id","staff">, R<"visit_items_service_id_fkey","service_id","services">]>;
       customer_packages: Tbl<CustomerPackage, "service_id" | "used_sessions" | "price_paid" | "purchased_at" | "expires_at" | "notes" | "sale_id" | "is_active", [R<"customer_packages_customer_id_fkey","customer_id","customers">]>;
@@ -181,7 +185,7 @@ export type Database = {
       gift_card_uses: Tbl<GiftCardUse, "sale_id", [R<"gift_card_uses_gift_card_id_fkey","gift_card_id","gift_cards">]>;
       products: Tbl<Product, Exclude<keyof Product, "name">>;
       suppliers: Tbl<Supplier, Exclude<keyof Supplier, "name">>;
-      reviews: Tbl<Review, Exclude<keyof Review, "id">, [R<"reviews_customer_id_fkey","customer_id","customers">]>;
+      reviews: Tbl<Review, Exclude<keyof Review, "id">, [R<"reviews_customer_id_fkey","customer_id","customers">, R<"reviews_staff_id_fkey","staff_id","staff">]>;
       gift_card_templates: Tbl<GiftCardTemplate, Exclude<keyof GiftCardTemplate, "name" | "amount">>;
       warehouses: Tbl<Warehouse, Exclude<keyof Warehouse, "name">>;
       stock_moves: Tbl<StockMove, "unit_cost" | "note" | "sale_id" | "staff_id" | "created_by", [R<"stock_moves_product_id_fkey","product_id","products">, R<"stock_moves_staff_id_fkey","staff_id","staff">]>;

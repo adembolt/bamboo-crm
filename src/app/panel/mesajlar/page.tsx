@@ -6,6 +6,8 @@ import { MessageList, type MsgRow } from "./message-list";
 import { TemplateEditor } from "./template-editor";
 import { getT } from "@/lib/i18n/server";
 
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://bamboo-crm-tau.vercel.app";
+
 export async function generateMetadata() {
   return { title: (await getT())("Mesajlar") };
 }
@@ -32,7 +34,7 @@ export default async function MessagesPage({ searchParams }: PageProps<"/panel/m
   if (kind === "reminder" || kind === "thanks") {
     const dayStart = new Date(`${d}T00:00:00+03:00`).toISOString(), dayEnd = new Date(`${d}T23:59:59+03:00`).toISOString();
     const { data: items } = await supabase.from("visit_items")
-      .select("id, visit_id, service_name, starts_at, price, discount, status, staff:staff(full_name), visit:visits!inner(id, status, customer:customers(id, first_name, last_name, phone, locale, nationality, is_blocked))")
+      .select("id, visit_id, service_name, starts_at, price, discount, status, staff:staff(full_name), visit:visits!inner(id, status, review_token, customer:customers(id, first_name, last_name, phone, locale, nationality, is_blocked))")
       .gte("starts_at", dayStart).lte("starts_at", dayEnd).order("starts_at");
     const wanted = kind === "reminder" ? ["pending", "confirmed"] : ["completed", "arrived"];
     const byVisit = new Map<string, NonNullable<typeof items>>();
@@ -45,7 +47,10 @@ export default async function MessagesPage({ searchParams }: PageProps<"/panel/m
       const services = its.map((i) => i.service_name).join(", ");
       const staffNames = [...new Set(its.map((i) => i.staff?.full_name).filter(Boolean))].join(", ");
       const total = its.reduce((a, i) => a + Number(i.price) - Number(i.discount), 0);
-      let body = fill(tpl(kind, loc), { ad: c.first_name, tarih: fmtForLocale(d, loc), saat: fmtTime(its[0].starts_at), hizmetler: services, personel: staffNames, toplam: money(total), salon, yorum_link: review });
+      // Teşekkür mesajında yorum linki: önce kendi puan sayfamız (4–5 yıldız Google'a yönlenir, düşük puan size kalır)
+      const token = (its[0].visit as { review_token?: string } | null)?.review_token;
+      const yorum = token ? `${SITE}/yorum/${token}` : review;
+      let body = fill(tpl(kind, loc), { ad: c.first_name, tarih: fmtForLocale(d, loc), saat: fmtTime(its[0].starts_at), hizmetler: services, personel: staffNames, toplam: money(total), salon, yorum_link: yorum });
       // Şablonda "yarın" sabit; seçilen gün yarın değilse kaldır (tarih zaten yazılı)
       if (kind === "reminder" && d !== addDays(today, 1)) body = body.replace(d === today ? /\byarın\b/i : /\byarın\s+/i, d === today ? "bugün" : "").replace(d === today ? /\btomorrow\b/i : /\btomorrow,?\s*/i, d === today ? "today" : "").replace(d === today ? /завтра/i : /завтра,?\s*/i, d === today ? "сегодня" : "");
       rows.push({ id: visitId, customerId: c.id, visitId, name: fullName(c), phone: c.phone, locale: loc, meta: `${fmtTime(its[0].starts_at)} · ${services}${staffNames ? ` · ${staffNames}` : ""}`, body, href: waLink(c.phone, body), sentAt: logs?.find((l) => l.visit_id === visitId)?.sent_at ?? null, blocked: c.is_blocked });

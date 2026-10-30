@@ -34,6 +34,11 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
     supabase.from("visits").select("visit_date").gte("visit_date", monthStart).lte("visit_date", monthEnd).neq("status", "cancelled"),
     supabase.from("staff_services").select("staff_id, service_id, price_override, duration_override"),
   ]);
+  // "Personel" rolündeki kullanıcı (DIKIDI'deki "sadece görüntüleme") sadece kendi sütununu görür
+  if (profile?.role === "staff" && profile.staff_id) {
+    day.staff = day.staff.filter((x) => x.id === profile.staff_id);
+    day.items = day.items.filter((x) => x.staff_id === profile.staff_id);
+  }
   const staffServices: Record<string, string[]> = {};
   const overrides: Record<string, { p: number | null; d: number | null }> = {};
   for (const r of ssRows ?? []) {
