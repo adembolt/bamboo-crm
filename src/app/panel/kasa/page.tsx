@@ -28,6 +28,7 @@ export default async function KasaPage({ searchParams }: PageProps<"/panel/kasa"
         {isManager ? <Link className="btn ghost sm ml-auto" href="/panel/kasa/hesaplar">{t("Kasa ve banka")}</Link> : null}
         <Link className={`btn ghost sm${isManager ? "" : " ml-auto"}`} href="/panel/kasa/hediye">{t("Hediye çekleri")}</Link>
         <Link className="btn ghost sm" href={`/panel/kasa/rapor?p=day&from=${d}`}>{t("Grafikler")}</Link>
+        {isManager && <Link className="btn ghost sm" href={`/panel/kasa/indir?from=${d.slice(0, 7)}-01&to=${d}`}>⬇ {t("Rapor indir")}</Link>}
         <Link className="btn ghost sm" href={`/panel/kasa/ay?m=${d.slice(0, 7)}`}>{t("Ay özeti →")}</Link>
       </header>
 

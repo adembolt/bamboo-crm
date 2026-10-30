@@ -80,7 +80,8 @@ export default async function ReportPage({ searchParams }: PageProps<"/panel/kas
         ) : (
           <form className="flex items-center gap-2" action="/panel/kasa/rapor"><input type="hidden" name="p" value="custom" /><span className="inp"><input type="date" name="from" defaultValue={start} /></span><span className="text-muted">–</span><span className="inp"><input type="date" name="to" defaultValue={end} /></span><button className="btn ghost sm">{t("Göster")}</button></form>
         )}
-        <Link className="btn ghost sm ml-auto" href="/panel/kasa">{t("Günlük kasa")}</Link>
+        <Link className="btn ghost sm ml-auto" href={`/panel/kasa/indir?from=${start}&to=${end}`}>⬇ {t("Rapor indir")}</Link>
+        <Link className="btn ghost sm" href="/panel/kasa">{t("Günlük kasa")}</Link>
         <Link className="btn ghost sm" href={`/panel/kasa/ay?m=${start.slice(0, 7)}`}>{t("Ay özeti")}</Link>
       </header>
 
