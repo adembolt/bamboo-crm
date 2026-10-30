@@ -18,7 +18,7 @@ export default async function ReviewPage({ params, searchParams }: { params: Pro
   const sp = await searchParams;
   if (!/^[0-9a-f]{20,64}$/.test(token)) notFound();
   const db = createAdminClient();
-  const { data: v } = await db.from("visits").select("id, visit_date, customer:customers(first_name, last_name, locale, phone, nationality), items:visit_items(service_name, status, staff:staff(full_name))").eq("review_token", token).maybeSingle();
+  const { data: v } = await db.from("visits").select("id, visit_date, customer:customers(first_name, last_name, locale, phone, nationality), items:visit_items(service_name, status, staff:staff!visit_items_staff_id_fkey(full_name))").eq("review_token", token).maybeSingle();
   if (!v) notFound();
   const c = v.customer as { first_name: string; last_name: string; locale: string; phone: string; nationality: string } | null;
   const lang = (["tr", "en", "ru"].includes(String(sp.lang)) ? String(sp.lang) : c ? pickLocale(c) : "tr") as "tr" | "en" | "ru";

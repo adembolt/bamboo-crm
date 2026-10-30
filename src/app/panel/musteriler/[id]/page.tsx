@@ -21,7 +21,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
     supabase.from("customers").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("visits")
-      .select("id, visit_date, status, discount_percent, notes, items:visit_items(id, service_name, starts_at, ends_at, price, discount, status, staff:staff(full_name))")
+      .select("id, visit_date, status, discount_percent, notes, items:visit_items(id, service_name, starts_at, ends_at, price, discount, status, staff:staff!visit_items_staff_id_fkey(full_name))")
       .eq("customer_id", id)
       .order("visit_date", { ascending: false })
       .limit(60),

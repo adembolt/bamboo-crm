@@ -34,7 +34,7 @@ export default async function MessagesPage({ searchParams }: PageProps<"/panel/m
   if (kind === "reminder" || kind === "thanks") {
     const dayStart = new Date(`${d}T00:00:00+03:00`).toISOString(), dayEnd = new Date(`${d}T23:59:59+03:00`).toISOString();
     const { data: items } = await supabase.from("visit_items")
-      .select("id, visit_id, service_name, starts_at, price, discount, status, staff:staff(full_name), visit:visits!inner(id, status, review_token, customer:customers(id, first_name, last_name, phone, locale, nationality, is_blocked))")
+      .select("id, visit_id, service_name, starts_at, price, discount, status, staff:staff!visit_items_staff_id_fkey(full_name), visit:visits!inner(id, status, review_token, customer:customers(id, first_name, last_name, phone, locale, nationality, is_blocked))")
       .gte("starts_at", dayStart).lte("starts_at", dayEnd).order("starts_at");
     const wanted = kind === "reminder" ? ["pending", "confirmed"] : ["completed", "arrived"];
     const byVisit = new Map<string, NonNullable<typeof items>>();

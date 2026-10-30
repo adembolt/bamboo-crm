@@ -28,7 +28,7 @@ export async function personalize(input: { customerId: string | null; kind: stri
   if (!input.customerId) return { ok: false as const, error: t("Müşteri yok.") };
   const [{ data: c }, { data: visits }, { data: pk }, { data: st }] = await Promise.all([
     supabase.from("customers").select("first_name, last_name, gender, notes, balance, loyalty_points").eq("id", input.customerId).single(),
-    supabase.from("visits").select("visit_date, status, items:visit_items(service_name, staff:staff(full_name))").eq("customer_id", input.customerId).order("visit_date", { ascending: false }).limit(6),
+    supabase.from("visits").select("visit_date, status, items:visit_items(service_name, staff:staff!visit_items_staff_id_fkey(full_name))").eq("customer_id", input.customerId).order("visit_date", { ascending: false }).limit(6),
     supabase.from("customer_packages").select("name, total_sessions, used_sessions, expires_at").eq("customer_id", input.customerId).eq("is_active", true),
     supabase.from("settings").select("business_name, google_review_url").eq("id", 1).single(),
   ]);

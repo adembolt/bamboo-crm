@@ -18,7 +18,7 @@ export async function getVisitDetail(visitId: string) {
   if (!v) return { ok: false as const, error: t("Ziyaret bulunamadı.") };
   const cid = v.customer?.id;
   const [{ data: hist }, { data: msgs }, { data: files }, { data: audit }, { data: sale }] = await Promise.all([
-    cid ? supabase.from("visits").select("id, visit_date, status, items:visit_items(service_name, price, discount, staff:staff(full_name))").eq("customer_id", cid).neq("id", visitId).order("visit_date", { ascending: false }).limit(12) : Promise.resolve({ data: [] as never[] }),
+    cid ? supabase.from("visits").select("id, visit_date, status, items:visit_items(service_name, price, discount, staff:staff!visit_items_staff_id_fkey(full_name))").eq("customer_id", cid).neq("id", visitId).order("visit_date", { ascending: false }).limit(12) : Promise.resolve({ data: [] as never[] }),
     supabase.from("message_log").select("kind, channel, body, sent_at").eq("visit_id", visitId).order("sent_at", { ascending: false }),
     supabase.from("visit_files").select("id, file_name, storage_path, mime, size_bytes, created_at").eq("visit_id", visitId).order("created_at"),
     supabase.from("audit_log").select("action, diff, created_at, actor_id").eq("entity", "visit").eq("entity_id", visitId).order("created_at", { ascending: false }).limit(30),
@@ -231,7 +231,7 @@ export async function searchAppointments(q: string) {
   const ids = (cs ?? []).map((c) => c.id);
   if (!ids.length) return [];
   const from = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-  const { data } = await supabase.from("visits").select("id, visit_date, status, customer:customers(first_name, last_name, phone), items:visit_items(starts_at, service_name, status, staff:staff(full_name))")
+  const { data } = await supabase.from("visits").select("id, visit_date, status, customer:customers(first_name, last_name, phone), items:visit_items(starts_at, service_name, status, staff:staff!visit_items_staff_id_fkey(full_name))")
     .in("customer_id", ids).gte("visit_date", from).neq("status", "cancelled").order("visit_date").limit(25);
   return (data ?? []).map((v) => {
     const its = v.items.filter((i) => i.status !== "cancelled").sort((a, b) => a.starts_at.localeCompare(b.starts_at));
