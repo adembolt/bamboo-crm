@@ -18,6 +18,18 @@
   }
 }
 
+/* Takvim: panel koyu temada olsa da her zaman açık renk; randevu kutuları adaçayı yeşili */
+.cal-light {
+  --ground: #f3f6f1; --surface: #ffffff; --sunk: #eef3ec; --ink: #14261a; --muted: #5b6b5f; --line: #dce4da;
+  --green: #0a7a1e; --green-soft: #ddefdf; --gold: #a8854a; --gold-soft: #f3ead9;
+  --good: #1e8a3a; --warn: #b7790b; --bad: #c0392b; --good-bg: #e1f2e5; --warn-bg: #fbf0d9; --bad-bg: #f9e3e0;
+  --shadow: 0 1px 2px rgba(20,38,26,.06), 0 6px 24px rgba(20,38,26,.06);
+  --sage: #d6e4cf; --sage-deep: #c2d6b8; --sage-line: #9fba92;
+  color-scheme: light;
+  background: var(--surface);
+  color: var(--ink);
+}
+
 @theme inline {
   --color-ground: var(--ground);
   --color-surface: var(--surface);

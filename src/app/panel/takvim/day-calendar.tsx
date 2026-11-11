@@ -239,7 +239,7 @@ export function DayCalendar(props: {
   if (!week && byStaff.unassigned.length) columns.push({ key: "none", date, staffId: null, name: t("Atanmamış"), title: "", color: "#9aa69c", photo: null, kind: "staff", items: byStaff.unassigned });
 
   return (
-    <div className="panel p-0 overflow-hidden">
+    <div className="panel p-0 overflow-hidden cal-light">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-line bg-surface" aria-label={t("Takvimde görünen personel")}>
         <span className="eyebrow mr-1">{week ? t("Uzman") : t("Göster")}</span>
         {week && staff.map((s) => (
@@ -353,7 +353,7 @@ export function DayCalendar(props: {
                     className={`absolute left-1 right-1 rounded-lg text-left px-2 py-1 overflow-hidden shadow-card border select-none flex flex-col justify-start items-stretch gap-px ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${isDragged && drag.mode === "move" ? "opacity-40" : ""}`}
                     style={{
                       top, height: hh, zIndex: isDragged ? 15 : undefined,
-                      background: it.status === "no_show" ? "var(--bad-bg)" : it.visit.color ? `color-mix(in srgb, ${it.visit.color} 45%, var(--surface))` : it.status === "completed" || it.status === "arrived" ? "var(--good-bg)" : it.status === "pending" ? "var(--warn-bg)" : "var(--surface)",
+                      background: it.status === "no_show" ? "var(--bad-bg)" : it.visit.color ? `color-mix(in srgb, ${it.visit.color} 45%, var(--surface))` : it.status === "completed" || it.status === "arrived" ? "var(--sage-deep)" : "var(--sage)",
                       backgroundImage: it.break_min > 0 ? `repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--muted) 25%, transparent) 5px 7px)` : undefined,
                       backgroundSize: it.break_min > 0 ? `100% ${it.break_min * PX_PER_MIN}px` : undefined,
                       backgroundPosition: "bottom", backgroundRepeat: "no-repeat",
