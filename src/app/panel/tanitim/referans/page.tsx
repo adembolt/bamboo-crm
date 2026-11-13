@@ -18,10 +18,12 @@ export default async function ReferralPage({ searchParams }: { searchParams: Pro
   type C = { id: string; first_name: string; last_name: string; created_at: string; referrer: { id: string; first_name: string; last_name: string } | null };
   const [{ data: offers }, { data: invited }, { data: rewards }] = await Promise.all([
     supabase.from("referral_offers").select("*").order("created_at"),
-    supabase.from("customers").select("id, first_name, last_name, created_at, referrer:customers!customers_referred_by_fkey(id, first_name, last_name)").not("referred_by", "is", null).gte("created_at", `${period.from}T00:00:00+03:00`).lte("created_at", `${period.to}T23:59:59+03:00`).order("created_at", { ascending: false }),
+    supabase.from("customers").select("id, first_name, last_name, created_at, referred_by").not("referred_by", "is", null).gte("created_at", `${period.from}T00:00:00+03:00`).lte("created_at", `${period.to}T23:59:59+03:00`).order("created_at", { ascending: false }),
     supabase.from("referral_rewards").select("invitee_id, points, created_at").gte("created_at", `${period.from}T00:00:00+03:00`).lte("created_at", `${period.to}T23:59:59+03:00`),
   ]);
-  const list = (invited ?? []) as unknown as C[];
+  const refIds = [...new Set((invited ?? []).map((c) => c.referred_by!).filter(Boolean))];
+  const { data: refs } = refIds.length ? await supabase.from("customers").select("id, first_name, last_name").in("id", refIds) : { data: [] };
+  const list: C[] = (invited ?? []).map((c) => ({ ...c, referrer: (refs ?? []).find((r) => r.id === c.referred_by) ?? null }));
   const referrers = new Set(list.map((c) => c.referrer?.id).filter(Boolean)).size;
   const pts = (rewards ?? []).reduce((a, r) => a + r.points, 0);
   const rewarded = new Set((rewards ?? []).map((r) => r.invitee_id));
