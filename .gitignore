@@ -40,3 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .guncelleme.log
+.next-yeni/
+.next-eski/

@@ -1,7 +1,7 @@
 import "server-only";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { appendFile } from "node:fs/promises";
+import { appendFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 /* iMac'teki kopyanın kendini güncellemesi (Vercel'de çalışmaz):
@@ -39,8 +39,9 @@ export async function applyUpdate(reason: string): Promise<{ ok: boolean; messag
   if (!isLocal) return { ok: false, message: "Bu sürüm internette çalışıyor; orada güncelleme otomatik." };
   if (busy) return { ok: false, message: "Güncelleme zaten sürüyor." };
   busy = true;
+  let before = "";
   try {
-    const before = await git("rev-parse", "HEAD");
+    before = await git("rev-parse", "HEAD");
     await git("fetch", "-q", "origin", "main");
     const dirty = await git("status", "--porcelain", "--untracked-files=no");
     if (dirty) { await git("stash", "push", "-m", `otomatik-guncelleme-${Date.now()}`); await log("yerel değişiklikler stash'e alındı"); }
@@ -51,7 +52,20 @@ export async function applyUpdate(reason: string): Promise<{ ok: boolean; messag
     if (/^package(-lock)?\.json$/m.test(changed)) { await run("npm", ["install", "--no-audit", "--no-fund"], { cwd: CWD, timeout: 600_000 }); await log("npm install tamam"); }
     await log(`${reason}: ${before.slice(0, 7)} → ${after.slice(0, 7)}`);
     if (isDev) { busy = false; last = { ...(last ?? (await checkUpdate(false))), lastResult: `Güncellendi (${after.slice(0, 7)})` }; return { ok: true, message: "Güncellendi. Sayfa birkaç saniyede yenilenir." }; }
-    await run("npm", ["run", "build"], { cwd: CWD, timeout: 900_000, maxBuffer: 50 * 1024 * 1024 });
+    // Yeni sürüm ayrı klasörde derlenir; çalışan .next'e dokunulmaz
+    const NEW = path.join(CWD, ".next-yeni"), CUR = path.join(CWD, ".next"), OLD = path.join(CWD, ".next-eski");
+    await rm(NEW, { recursive: true, force: true });
+    try {
+      await run("npm", ["run", "build"], { cwd: CWD, timeout: 900_000, maxBuffer: 50 * 1024 * 1024, env: { ...process.env, BAMBOO_DIST_DIR: ".next-yeni", NODE_ENV: "production" } });
+    } catch (e) {
+      // derleme başarısızsa kod eski sürüme döner; çalışan program bozulmaz, sonraki kontrolde yeniden denenir
+      await git("reset", "--hard", before).catch(() => {});
+      await rm(NEW, { recursive: true, force: true }).catch(() => {});
+      throw e;
+    }
+    await rm(OLD, { recursive: true, force: true });
+    await rename(CUR, OLD).catch(() => {});
+    await rename(NEW, CUR);
     await log("build tamam, yeniden başlatılıyor");
     setTimeout(() => process.exit(0), 1500); // LaunchAgent yeniden başlatır
     return { ok: true, message: "Güncellendi; program yeniden başlıyor (yaklaşık 10 saniye).", restarting: true };
