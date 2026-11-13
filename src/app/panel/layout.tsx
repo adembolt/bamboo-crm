@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { BambooLogo } from "@/components/logo";
+import { UpdateBanner } from "@/components/update-banner";
 import { Nav } from "@/components/nav";
 import { logout } from "@/app/login/actions";
 import { LangProvider } from "@/lib/i18n/client";
@@ -31,7 +32,7 @@ export default async function PanelLayout({ children }: LayoutProps<"/panel">) {
           <button className="btn ghost sm w-full" type="submit">{t("Çıkış")}</button>
         </form>
       </aside>
-      <main className="flex-1 min-w-0 px-3 py-3 md:px-4 md:py-4">{children}</main>
+      <main className="flex-1 min-w-0 px-3 py-3 md:px-4 md:py-4"><UpdateBanner />{children}</main>
     </div>
     </LangProvider>
   );
