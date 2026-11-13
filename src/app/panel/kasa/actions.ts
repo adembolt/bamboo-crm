@@ -1,4 +1,5 @@
 "use server";
+import { awardReferral } from "@/lib/referral";
 import { revalidatePath } from "next/cache";
 import { requireOps, requireManager } from "@/lib/auth";
 import type { PayMethod } from "@/lib/database.types";
@@ -113,6 +114,7 @@ export async function closeVisit(input: CloseVisitInput) {
     if (earned) await supabase.from("loyalty_ledger").insert({ customer_id: visit.customer_id, points: earned, reason: "Ziyaret kazanımı", sale_id: sale.id });
     if (delta) await supabase.from("customers").update({ loyalty_points: customerPoints + delta }).eq("id", visit.customer_id);
   }
+  if (visit.customer_id) await awardReferral(supabase, visit.customer_id, sale.id).catch(() => {});
   await supabase.from("visits").update({ status: "completed", discount_percent: input.discountPercent }).eq("id", visit.id);
   await supabase.from("visit_items").update({ status: "completed" }).eq("visit_id", visit.id).neq("status", "cancelled");
 

@@ -39,7 +39,7 @@ export function SupplierUI({ suppliers, warehouses, staff, canManage }: { suppli
           </button>
         ))}
       </section>
-      <section className="panel grid gap-2">
+      <section id="depolar" className="panel grid gap-2 scroll-mt-4">
         <div className="flex items-center"><h2 className="font-bold">{t("Depolar")} <span className="text-muted text-sm">({warehouses.length})</span></h2>{canManage && <button className="btn ghost sm ml-auto" onClick={() => setW({ id: "", name: "", responsible_staff_id: null, is_active: true })}>+ {t("Ekle")}</button>}</div>
         {w && (
           <div className="grid gap-2 border border-line rounded-xl p-2">

@@ -9,7 +9,7 @@ import { addDays, todayIso } from "@/lib/format";
    + çalıştığı gün başına sabit ücret; günlük garanti varsa gün toplamı garantinin altına düşmez.
    Şeması olmayan personel için eski staff.pay_percent / product_percent kullanılır. */
 
-export type PayLine = { own: number; company: number; booking: number; fixed: number; guarantee: number; total: number; serviceSales: number; productSales: number; days: number; scheme: StaffPayScheme | null };
+export type PayLine = { byDay: { day: string; total: number; worked: boolean }[]; own: number; company: number; booking: number; fixed: number; guarantee: number; total: number; serviceSales: number; productSales: number; days: number; scheme: StaffPayScheme | null };
 
 type Item = { staff_id: string | null; kind: string; qty: number; unit_price: number; total: number; material_cost: number; sale_date: string; author: string | null };
 
@@ -64,7 +64,7 @@ export async function computePayroll(supabase: SupabaseClient<Database>, from: s
 
   const out = new Map<string, PayLine>();
   for (const s of staff ?? []) {
-    const line: PayLine = { own: 0, company: 0, booking: 0, fixed: 0, guarantee: 0, total: 0, serviceSales: 0, productSales: 0, days: 0, scheme: null };
+    const line: PayLine = { byDay: [], own: 0, company: 0, booking: 0, fixed: 0, guarantee: 0, total: 0, serviceSales: 0, productSales: 0, days: 0, scheme: null };
     for (const day of days) {
       const its = byDay.get(day) ?? [];
       const sc = schemeFor(s.id, day);
@@ -92,6 +92,7 @@ export async function computePayroll(supabase: SupabaseClient<Database>, from: s
       if (isWorked) line.days++;
       const dayTotal = dayOwn + dayComp + dayBook + dayFixed;
       const g = sc && isWorked && Number(sc.daily_guarantee) > dayTotal ? Number(sc.daily_guarantee) - dayTotal : 0;
+      if (dayTotal + g > 0 || isWorked) line.byDay.push({ day, total: r2(dayTotal + g), worked: isWorked });
       line.own += dayOwn; line.company += dayComp; line.booking += dayBook; line.fixed += dayFixed; line.guarantee += g;
     }
     line.total = r2(line.own + line.company + line.booking + line.fixed + line.guarantee);

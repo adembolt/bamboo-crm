@@ -12,5 +12,6 @@ import sync from "./sync";
 import growth from "./growth";
 import overrides from "./overrides";
 import forms from "./forms";
+import parity from "./parity";
 
-export const DICT: Record<string, [string, string]> = { ...admin, ...clients, ...kasa, ...visit, ...calendar, ...hours, ...crm, ...wa, ...sync, ...growth, ...forms, ...common, ...overrides };
+export const DICT: Record<string, [string, string]> = { ...admin, ...clients, ...kasa, ...visit, ...calendar, ...hours, ...crm, ...wa, ...sync, ...growth, ...forms, ...parity, ...common, ...overrides };

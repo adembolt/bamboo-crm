@@ -21,14 +21,16 @@ export default async function AccountsPage() {
   const { data: accs } = await supabase.from("cash_accounts").select("*").eq("is_active", true).order("sort_order");
   const accounts = (accs ?? []) as CashAccount[];
   const since = accounts.reduce((m, a) => (a.opening_date < m ? a.opening_date : m), todayIso());
-  const [pays, exps, payouts, { data: adjs }] = await Promise.all([
+  const [pays, exps, payouts, { data: adjs }, tips] = await Promise.all([
     sumAll((f) => supabase.from("sale_payments").select("method, amount, sale:sales!inner(sale_date)").gte("sale.sale_date", since).range(f, f + 999)),
     sumAll((f) => supabase.from("expenses").select("method, amount, expense_date").gte("expense_date", since).range(f, f + 999)),
     sumAll((f) => supabase.from("staff_payouts").select("method, amount, paid_at").gte("paid_at", since).range(f, f + 999)),
     supabase.from("cash_adjustments").select("*").order("adj_date", { ascending: false }).limit(200),
+    sumAll((f) => supabase.from("tips").select("method, amount, tip_date").eq("to_payroll", true).gte("tip_date", since).range(f, f + 999)),
   ]);
   const rows = accounts.map((a) => {
-    const inn = (pays as unknown as { method: PayMethod; amount: number; sale: { sale_date: string } }[]).filter((p) => KIND_OF[p.method] === a.kind && p.sale.sale_date >= a.opening_date).reduce((s, p) => s + Number(p.amount), 0);
+    const inn = (pays as unknown as { method: PayMethod; amount: number; sale: { sale_date: string } }[]).filter((p) => KIND_OF[p.method] === a.kind && p.sale.sale_date >= a.opening_date).reduce((s, p) => s + Number(p.amount), 0)
+      + (tips as { method: PayMethod; amount: number; tip_date: string }[]).filter((x) => KIND_OF[x.method] === a.kind && x.tip_date >= a.opening_date).reduce((s, x) => s + Number(x.amount), 0);
     const out1 = (exps as { method: PayMethod; amount: number; expense_date: string }[]).filter((e) => KIND_OF[e.method] === a.kind && e.expense_date >= a.opening_date).reduce((s, e) => s + Number(e.amount), 0);
     const out2 = (payouts as { method: PayMethod; amount: number; paid_at: string }[]).filter((e) => KIND_OF[e.method] === a.kind && e.paid_at >= a.opening_date).reduce((s, e) => s + Number(e.amount), 0);
     const adj = (adjs ?? []).filter((x) => x.account_id === a.id && x.adj_date >= a.opening_date).reduce((s, x) => s + Number(x.amount), 0);

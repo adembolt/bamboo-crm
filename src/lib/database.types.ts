@@ -17,7 +17,7 @@ export type Settings = {
   slot_minutes: number; open_time: string; close_time: string; open_days: number[];
   online_booking_enabled: boolean; online_requires_approval: boolean; online_min_notice_minutes: number;
   online_max_days_ahead: number; online_cancel_limit_minutes: number; kdv_rate: number;
-  whatsapp_number: string; instagram_url: string; google_review_url: string; import_token: string; loyalty_earn_percent: number; loyalty_point_value: number; loyalty_max_pay_percent: number; payroll_start: string; referral_inviter_points: number; referral_invitee_discount: number; package_default_months: number; updated_at: string;
+  whatsapp_number: string; instagram_url: string; google_review_url: string; import_token: string; loyalty_earn_percent: number; loyalty_point_value: number; loyalty_max_pay_percent: number; payroll_start: string; referral_inviter_points: number; referral_invitee_discount: number; package_default_months: number; fine_no_show: number; fine_late_cancel: number; fine_late_cancel_hours: number; updated_at: string;
 };
 
 export type ServiceCategory = {
@@ -111,6 +111,12 @@ export type Product = {
 export type Review = { id: string; customer_id: string | null; author_name: string; staff_id: string | null; rating: number; body: string; reply: string; is_public: boolean; source: string; dikidi_id: string | null; created_at: string; visit_id: string | null; handled: boolean };
 export type CustomerNote = { id: string; customer_id: string; body: string; created_by: string | null; created_at: string };
 export type CustomerPhoto = { id: string; customer_id: string; storage_path: string; caption: string; taken_at: string; created_at: string; kind: "before" | "after" | "other"; visit_id: string | null; created_by: string | null };
+export type Tip = { id: string; tip_date: string; staff_id: string; amount: number; method: PayMethod; to_payroll: boolean; customer_id: string | null; note: string; created_by: string | null; created_at: string };
+export type Fine = { id: string; customer_id: string; visit_id: string | null; kind: "no_show" | "late_cancel" | "other"; amount: number; reason: string; fine_date: string; waived: boolean; created_by: string | null; created_at: string };
+export type CallLog = { id: string; call_at: string; direction: "in" | "out"; outcome: "answered" | "missed" | "no_answer" | "booked" | "callback"; customer_id: string | null; phone: string; note: string; created_by: string | null; created_at: string };
+export type ReferralOffer = { id: string; name: string; referrer_points: number; invitee_discount: number; is_active: boolean; created_at: string };
+export type ReferralReward = { id: string; invitee_id: string; referrer_id: string; offer_id: string | null; points: number; sale_id: string | null; created_at: string };
+export type Deal = { id: string; title: string; description: string; discount_percent: number | null; price: number | null; old_price: number | null; starts_on: string; ends_on: string | null; service_ids: string[]; is_published: boolean; is_archived: boolean; created_at: string };
 export type PackageTemplate = { id: string; name: string; service_id: string | null; sessions: number; price: number; valid_days: number | null; description: string; is_active: boolean; sort_order: number; created_at: string };
 export type ClientForm = {
   id: string; customer_id: string; visit_id: string | null; form_key: string; form_date: string; status: "pending" | "signed" | "completed";
@@ -173,6 +179,12 @@ export type Database = {
       staff_day_hours: { Row: { staff_id: string; day: string; start_time: string; end_time: string; source: string }; Insert: { staff_id: string; day: string; start_time: string; end_time: string; source?: string }; Update: Partial<{ staff_id: string; day: string; start_time: string; end_time: string; source: string }>; Relationships: [] };
       service_resources: { Row: { service_id: string; resource_id: string }; Insert: { service_id: string; resource_id: string }; Update: Partial<{ service_id: string; resource_id: string }>; Relationships: [] };
       customers: Tbl<Customer, Exclude<keyof Customer, "first_name">>;
+      tips: Tbl<Tip, "tip_date" | "method" | "to_payroll" | "customer_id" | "note" | "created_by", [R<"tips_staff_id_fkey","staff_id","staff">, R<"tips_customer_id_fkey","customer_id","customers">]>;
+      fines: Tbl<Fine, "visit_id" | "kind" | "reason" | "fine_date" | "waived" | "created_by", [R<"fines_customer_id_fkey","customer_id","customers">, R<"fines_visit_id_fkey","visit_id","visits">]>;
+      call_logs: Tbl<CallLog, "call_at" | "direction" | "outcome" | "customer_id" | "phone" | "note" | "created_by", [R<"call_logs_customer_id_fkey","customer_id","customers">]>;
+      referral_offers: Tbl<ReferralOffer, "referrer_points" | "invitee_discount" | "is_active", []>;
+      referral_rewards: Tbl<ReferralReward, "offer_id" | "points" | "sale_id", [R<"referral_rewards_invitee_id_fkey","invitee_id","customers">, R<"referral_rewards_referrer_id_fkey","referrer_id","customers">]>;
+      deals: Tbl<Deal, "description" | "discount_percent" | "price" | "old_price" | "starts_on" | "ends_on" | "service_ids" | "is_published" | "is_archived", []>;
       package_templates: Tbl<PackageTemplate, "service_id" | "price" | "valid_days" | "description" | "is_active" | "sort_order", []>;
       client_forms: Tbl<ClientForm, "visit_id" | "form_date" | "status" | "data" | "signatures" | "flags" | "staff_name" | "staff_id" | "token" | "lang" | "signed_at" | "created_by", [R<"client_forms_customer_id_fkey","customer_id","customers">, R<"client_forms_visit_id_fkey","visit_id","visits">]>;
       client_sessions: Tbl<ClientSession, "visit_id" | "session_date" | "fields" | "staff_name" | "created_by", [R<"client_sessions_customer_id_fkey","customer_id","customers">]>;

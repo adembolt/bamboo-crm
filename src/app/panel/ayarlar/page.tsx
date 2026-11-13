@@ -52,7 +52,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/panel/a
             <label className="f">{t("Takvim aralığı (dk)")}<span className="inp"><select name="slot_minutes" defaultValue={String(s.slot_minutes)}>{[10, 15, 20, 30].map((m) => <option key={m} value={m}>{m}</option>)}</select></span></label>
           </div>
           <div className="flex gap-2 flex-wrap">{days.map((d, i) => <label key={d} className="flex items-center gap-1 text-sm font-semibold"><input type="checkbox" name="open_days" value={i + 1} defaultChecked={s.open_days.includes(i + 1)} /> {d}</label>)}</div>
-          <div className="eyebrow">{t("Online randevu")}</div>
+          <div id="online" className="eyebrow scroll-mt-4">{t("Online randevu")}</div>
           <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="online_booking_enabled" defaultChecked={s.online_booking_enabled} /> {t("Online randevu açık")}</label>
           <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="online_requires_approval" defaultChecked={s.online_requires_approval} /> {t("Talepler salon onayından sonra kesinleşir")}</label>
           <div className="grid grid-cols-3 gap-3">

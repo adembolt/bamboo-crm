@@ -16,11 +16,13 @@ export default async function BookingPage({ searchParams }: PageProps<"/randevu"
   const d = t(lang);
   const db = createAdminClient();
 
-  const [{ data: settings }, { data: cats }, { data: svcs }, { data: staff }] = await Promise.all([
+  const today = new Date().toISOString().slice(0, 10);
+  const [{ data: settings }, { data: cats }, { data: svcs }, { data: staff }, { data: deals }] = await Promise.all([
     db.from("settings").select("business_name, tagline, online_booking_enabled, whatsapp_number, online_requires_approval, online_max_days_ahead, open_days").eq("id", 1).single(),
     db.from("service_categories").select("id, name_tr, name_en, name_ru, sort_order, color").eq("is_active", true).order("sort_order"),
     db.from("services").select("id, category_id, name_tr, name_en, name_ru, description_tr, description_en, description_ru, duration_min, price, price_min, session_count").eq("is_active", true).eq("online_visible", true).order("sort_order").order("name_tr"),
     db.from("staff").select("id, full_name, title, color, languages").eq("is_active", true).eq("online_bookable", true).order("sort_order"),
+    db.from("deals").select("id, title, description, discount_percent, price, old_price, ends_on").eq("is_published", true).eq("is_archived", false).lte("starts_on", today).or(`ends_on.is.null,ends_on.gte.${today}`).order("created_at", { ascending: false }).limit(5),
   ]);
 
   const usedCatIds = new Set((svcs ?? []).map((s) => s.category_id));
@@ -42,6 +44,22 @@ export default async function BookingPage({ searchParams }: PageProps<"/randevu"
             ))}
           </nav>
         </header>
+
+        {(deals ?? []).length > 0 && (
+          <section className="grid gap-2" aria-label="Kampanyalar">
+            {(deals ?? []).map((x) => (
+              <div key={x.id} className="rounded-2xl border border-gold bg-gold-soft px-4 py-3 grid gap-0.5">
+                <b>✨ {x.title}</b>
+                {x.description && <span className="text-sm">{x.description}</span>}
+                <span className="text-sm font-semibold">
+                  {x.discount_percent ? `%${Number(x.discount_percent)} ` : ""}
+                  {x.price ? <>{x.old_price ? <s className="text-muted mr-1">{Number(x.old_price).toLocaleString("tr-TR")} ₺</s> : null}{Number(x.price).toLocaleString("tr-TR")} ₺</> : null}
+                  {x.ends_on ? <span className="text-xs text-muted font-normal"> · {x.ends_on.split("-").reverse().join(".")}</span> : null}
+                </span>
+              </div>
+            ))}
+          </section>
+        )}
 
         {!settings?.online_booking_enabled || !(svcs ?? []).length ? (
           <div className="panel grid gap-3">

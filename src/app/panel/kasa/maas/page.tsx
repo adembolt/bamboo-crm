@@ -23,22 +23,23 @@ export default async function PayrollLedgerPage({ searchParams }: { searchParams
   const { data: st } = await supabase.from("settings").select("payroll_start").eq("id", 1).single();
   const ps = st?.payroll_start ?? ms;
   const from = ms > ps ? ms : ps, to = me < today ? me : today;
-  const [{ data: staff }, before, month, { data: payouts }, { data: exps }, { data: adjs }] = await Promise.all([
+  const [{ data: staff }, before, month, { data: payouts }, { data: exps }, { data: adjs }, { data: tips }] = await Promise.all([
     supabase.from("staff").select("*").eq("is_active", true).order("sort_order"),
     ms > ps ? computePayroll(supabase, ps, addDaysIso(ms, -1)) : Promise.resolve(new Map()),
     from <= to ? computePayroll(supabase, from, to) : Promise.resolve(new Map()),
     supabase.from("staff_payouts").select("id, staff_id, amount, method, notes, paid_at").gte("paid_at", ps).lte("paid_at", me).order("paid_at"),
     supabase.from("expenses").select("id, staff_id, amount, category, description, expense_date").not("staff_id", "is", null).in("category", PAID_CATS).gte("expense_date", ps).lte("expense_date", me),
     supabase.from("staff_adjustments").select("*").gte("adj_date", ps).lte("adj_date", me).order("adj_date"),
+    supabase.from("tips").select("id, staff_id, amount, tip_date, note").eq("to_payroll", true).gte("tip_date", ps).lte("tip_date", me),
   ]);
   const sum = <T,>(rows: T[] | null | undefined, f: (r: T) => boolean, v: (r: T) => number) => (rows ?? []).filter(f).reduce((a, r) => a + v(r), 0);
   const rows = ((staff ?? []) as Staff[]).map((s) => {
     const inMonth = (d: string) => d >= ms && d <= me;
-    const earnedBefore = before.get(s.id)?.total ?? 0;
+    const earnedBefore = (before.get(s.id)?.total ?? 0) + sum(tips, (x) => x.staff_id === s.id && x.tip_date < ms, (x) => Number(x.amount));
     const paidBefore = sum(payouts, (p) => p.staff_id === s.id && p.paid_at < ms, (p) => Number(p.amount)) + sum(exps, (e) => e.staff_id === s.id && e.expense_date < ms, (e) => Number(e.amount));
     const adjBefore = sum(adjs, (a) => a.staff_id === s.id && a.adj_date < ms, (a) => Number(a.amount));
     const carry = ms > ps ? earnedBefore + adjBefore - paidBefore : 0;
-    const earned = month.get(s.id)?.total ?? 0;
+    const earned = (month.get(s.id)?.total ?? 0) + sum(tips, (x) => x.staff_id === s.id && inMonth(x.tip_date), (x) => Number(x.amount));
     const adj = sum(adjs, (a) => a.staff_id === s.id && inMonth(a.adj_date), (a) => Number(a.amount));
     const paid = sum(payouts, (p) => p.staff_id === s.id && inMonth(p.paid_at), (p) => Number(p.amount)) + sum(exps, (e) => e.staff_id === s.id && inMonth(e.expense_date), (e) => Number(e.amount));
     return { s, carry, earned, adj, paid, balance: carry + earned + adj - paid };
@@ -46,6 +47,7 @@ export default async function PayrollLedgerPage({ searchParams }: { searchParams
   const moves = [
     ...(payouts ?? []).filter((p) => p.paid_at >= ms).map((p) => ({ id: p.id, kind: "payout" as const, staff_id: p.staff_id, date: p.paid_at, amount: -Number(p.amount), note: p.notes || t("Maaş ödemesi") })),
     ...(exps ?? []).filter((e) => e.expense_date >= ms).map((e) => ({ id: e.id, kind: "expense" as const, staff_id: e.staff_id!, date: e.expense_date, amount: -Number(e.amount), note: `${t(e.category)}${e.description ? ` · ${e.description}` : ""}` })),
+    ...(tips ?? []).filter((x) => x.tip_date >= ms).map((x) => ({ id: x.id, kind: "tip" as const, staff_id: x.staff_id, date: x.tip_date, amount: Number(x.amount), note: `${t("Bahşiş")}${x.note ? ` · ${x.note}` : ""}` })),
     ...(adjs ?? []).filter((a) => a.adj_date >= ms).map((a) => ({ id: a.id, kind: "adj" as const, staff_id: a.staff_id, date: a.adj_date, amount: Number(a.amount), note: a.note || (Number(a.amount) > 0 ? t("Prim") : t("Kesinti")) })),
   ].sort((a, b) => b.date.localeCompare(a.date));
   const name = (id: string) => (staff ?? []).find((x) => x.id === id)?.full_name ?? "—";
