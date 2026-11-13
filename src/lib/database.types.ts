@@ -111,6 +111,7 @@ export type Product = {
 export type Review = { id: string; customer_id: string | null; author_name: string; staff_id: string | null; rating: number; body: string; reply: string; is_public: boolean; source: string; dikidi_id: string | null; created_at: string; visit_id: string | null; handled: boolean };
 export type CustomerNote = { id: string; customer_id: string; body: string; created_by: string | null; created_at: string };
 export type CustomerPhoto = { id: string; customer_id: string; storage_path: string; caption: string; taken_at: string; created_at: string; kind: "before" | "after" | "other"; visit_id: string | null; created_by: string | null };
+export type PackageTemplate = { id: string; name: string; service_id: string | null; sessions: number; price: number; valid_days: number | null; description: string; is_active: boolean; sort_order: number; created_at: string };
 export type ClientForm = {
   id: string; customer_id: string; visit_id: string | null; form_key: string; form_date: string; status: "pending" | "signed" | "completed";
   data: Record<string, unknown>; signatures: { client?: string; staff?: string }; flags: string[]; staff_name: string; staff_id: string | null;
@@ -172,6 +173,7 @@ export type Database = {
       staff_day_hours: { Row: { staff_id: string; day: string; start_time: string; end_time: string; source: string }; Insert: { staff_id: string; day: string; start_time: string; end_time: string; source?: string }; Update: Partial<{ staff_id: string; day: string; start_time: string; end_time: string; source: string }>; Relationships: [] };
       service_resources: { Row: { service_id: string; resource_id: string }; Insert: { service_id: string; resource_id: string }; Update: Partial<{ service_id: string; resource_id: string }>; Relationships: [] };
       customers: Tbl<Customer, Exclude<keyof Customer, "first_name">>;
+      package_templates: Tbl<PackageTemplate, "service_id" | "price" | "valid_days" | "description" | "is_active" | "sort_order", []>;
       client_forms: Tbl<ClientForm, "visit_id" | "form_date" | "status" | "data" | "signatures" | "flags" | "staff_name" | "staff_id" | "token" | "lang" | "signed_at" | "created_by", [R<"client_forms_customer_id_fkey","customer_id","customers">, R<"client_forms_visit_id_fkey","visit_id","visits">]>;
       client_sessions: Tbl<ClientSession, "visit_id" | "session_date" | "fields" | "staff_name" | "created_by", [R<"client_sessions_customer_id_fkey","customer_id","customers">]>;
       care_guides_given: Tbl<CareGuideGiven, "visit_id" | "given_at" | "created_by", [R<"care_guides_given_customer_id_fkey","customer_id","customers">]>;

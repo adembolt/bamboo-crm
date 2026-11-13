@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/app/panel/takvim/day-calendar";
 import { sellPackage, adjustPackage, adjustPoints, topUpBalance, adjustBalance } from "@/app/panel/kasa/actions";
@@ -8,6 +8,7 @@ import type { PayMethod } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/client";
 
 type Svc = { id: string; name_tr: string; price: number; session_count: number; kind: string };
+export type Tpl = { id: string; name: string; service_id: string | null; sessions: number; price: number; valid_days: number | null; description: string };
 type Pkg = { id: string; name: string; total_sessions: number; used_sessions: number; price_paid: number; purchased_at: string; expires_at: string | null; is_active: boolean };
 const METHOD: Partial<Record<PayMethod, string>> = { cash: "Nakit", card: "Kart", transfer: "Havale", online: "Online", gift_card: "Hediye çeki" };
 
@@ -65,7 +66,7 @@ export function BalancePanel({ customerId, balance, canWrite, isManager, ledger 
   );
 }
 
-export function PackagePanel({ customerId, packages, services, staff, defaultMonths, canWrite, isManager, points }: { customerId: string; packages: Pkg[]; services: Svc[]; staff: { id: string; full_name: string }[]; defaultMonths: number; canWrite: boolean; isManager: boolean; points: number }) {
+export function PackagePanel({ customerId, packages, services, staff, defaultMonths, canWrite, isManager, points, templates = [] }: { customerId: string; packages: Pkg[]; services: Svc[]; staff: { id: string; full_name: string }[]; defaultMonths: number; canWrite: boolean; isManager: boolean; points: number; templates?: Tpl[] }) {
   const t = useT();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -94,13 +95,13 @@ export function PackagePanel({ customerId, packages, services, staff, defaultMon
           </div>
         </div>
       ))}
-      {open && <SellDialog customerId={customerId} services={services} staff={staff} defaultMonths={defaultMonths} onClose={() => setOpen(false)} onDone={() => { setOpen(false); router.refresh(); }} />}
+      {open && <SellDialog customerId={customerId} templates={templates} services={services} staff={staff} defaultMonths={defaultMonths} onClose={() => setOpen(false)} onDone={() => { setOpen(false); router.refresh(); }} />}
       {ptOpen && <PointsDialog customerId={customerId} points={points} onClose={() => setPtOpen(false)} onDone={() => { setPtOpen(false); router.refresh(); }} />}
     </section>
   );
 }
 
-function SellDialog({ customerId, services, staff, defaultMonths, onClose, onDone }: { customerId: string; services: Svc[]; staff: { id: string; full_name: string }[]; defaultMonths: number; onClose: () => void; onDone: () => void }) {
+export function SellDialog({ customerId, services, staff, defaultMonths, onClose, onDone, templates = [], initialTemplateId, title }: { customerId: string; services: Svc[]; staff: { id: string; full_name: string }[]; defaultMonths: number; onClose: () => void; onDone: () => void; templates?: Tpl[]; initialTemplateId?: string; title?: string }) {
   const t = useT();
   const [pending, start] = useTransition();
   const [err, setErr] = useState("");
@@ -118,10 +119,25 @@ function SellDialog({ customerId, services, staff, defaultMonths, onClose, onDon
   const list = q.length < 2 ? services.filter((s) => s.session_count > 1 || s.kind === "package").slice(0, 12) : services.filter((s) => s.name_tr.toLocaleLowerCase("tr").includes(q.toLocaleLowerCase("tr"))).slice(0, 12);
   const pick = (s: Svc) => { setSvc(s); setQ(""); if (!name) setName(s.name_tr); if (s.session_count > 1) setSessions(String(s.session_count)); if (!price) setPrice(String(Math.round(Number(s.price) * (s.session_count > 1 ? 1 : Number(sessions) * 0.9)))); };
   const setPay = (i: number, patch: Partial<{ method: PayMethod; amount: string; ref: string }>) => setPays(pays.map((p, k) => (k === i ? { ...p, ...patch } : p)));
+  const [tplId, setTplId] = useState("");
+  const applyTpl = (id: string) => {
+    setTplId(id);
+    const tp = templates.find((x) => x.id === id); if (!tp) return;
+    setName(tp.name); setSessions(String(tp.sessions)); setPrice(String(Number(tp.price)));
+    setExpires(tp.valid_days ? addDays(todayIso(), tp.valid_days) : "");
+    setSvc(services.find((x) => x.id === tp.service_id) ?? null); setQ("");
+  };
+  useEffect(() => { if (initialTemplateId) applyTpl(initialTemplateId); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const submit = () => { setErr(""); start(async () => { const r = await sellPackage({ customerId, serviceId: svc?.id ?? null, name, sessions: Number(sessions) || 0, price: total, expiresAt: expires || null, staffId: staffId || null, saleDate: todayIso(), payments: effPays.map((p) => ({ method: p.method, amount: Number(p.amount) || 0, ref: p.ref })) }); if (!r.ok) setErr(r.error); else onDone(); }); };
   return (
-    <Modal title={t("Seans paketi sat")} onClose={onClose}>
+    <Modal title={title ?? t("Seans paketi sat")} onClose={onClose}>
       <div className="grid gap-3">
+        {templates.length > 0 && (
+          <label className="f">{t("Paket şablonu")}<span className="inp"><select value={tplId} onChange={(e) => applyTpl(e.target.value)}>
+            <option value="">{t("— elle doldur —")}</option>
+            {templates.map((tp) => <option key={tp.id} value={tp.id}>{tp.name} · {t("{n} seans", { n: tp.sessions })} · {money(tp.price)}</option>)}
+          </select></span></label>
+        )}
         <label className="f">{t("Hizmet (isteğe bağlı — paketten düşerken eşleşir)")}
           <span className="inp"><input value={svc ? svc.name_tr : q} onChange={(e) => { setSvc(null); setQ(e.target.value); }} placeholder={t("Hizmet ara…")} /></span>
         </label>

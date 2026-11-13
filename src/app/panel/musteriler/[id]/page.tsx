@@ -18,7 +18,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
   const canWrite = !!profile && ["owner", "manager", "reception"].includes(profile.role);
   const isManager = !!profile && ["owner", "manager"].includes(profile.role);
 
-  const [{ data: c }, { data: visits }, { data: packages }, { data: services }, { data: staff }, { data: settings }, { data: ledger }, { data: bledger }, { data: notes }, { data: photos }, { data: vfiles }, { data: revs }, { data: cforms }, { data: csess }, { data: cguides }] = await Promise.all([
+  const [{ data: c }, { data: visits }, { data: packages }, { data: services }, { data: staff }, { data: settings }, { data: ledger }, { data: bledger }, { data: notes }, { data: photos }, { data: vfiles }, { data: revs }, { data: cforms }, { data: csess }, { data: cguides }, { data: ptpls }] = await Promise.all([
     supabase.from("customers").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("visits")
@@ -39,6 +39,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
     supabase.from("client_forms").select("id, form_key, form_date, status, flags, staff_name, signed_at, visit_id, created_at").eq("customer_id", id).order("form_date", { ascending: false }).order("created_at", { ascending: false }).limit(100),
     supabase.from("client_sessions").select("id, kind, session_date, fields, staff_name").eq("customer_id", id).order("session_date").limit(300),
     supabase.from("care_guides_given").select("id, guide_key, given_at").eq("customer_id", id).order("given_at", { ascending: false }).limit(30),
+    supabase.from("package_templates").select("id, name, service_id, sessions, price, valid_days, description").eq("is_active", true).order("sort_order"),
   ]);
   if (!c) notFound();
   // fotoğraflar için geçici imzalı bağlantılar (özel depolama)
@@ -107,7 +108,7 @@ export default async function CustomerPage({ params }: PageProps<"/panel/musteri
 
         <div className="grid gap-4">
           <BalancePanel customerId={id} balance={Number(customer.balance)} canWrite={canWrite} isManager={isManager} ledger={(bledger ?? []).map((l) => ({ ...l, amount: Number(l.amount) }))} />
-          <PackagePanel customerId={id} packages={(packages ?? []).map((p) => ({ ...p, price_paid: Number(p.price_paid) }))} services={(services ?? []).map((s) => ({ ...s, price: Number(s.price) }))} staff={staff ?? []} defaultMonths={settings?.package_default_months ?? 6} canWrite={canWrite} isManager={isManager} points={customer.loyalty_points} />
+          <PackagePanel customerId={id} packages={(packages ?? []).map((p) => ({ ...p, price_paid: Number(p.price_paid) }))} services={(services ?? []).map((s) => ({ ...s, price: Number(s.price) }))} staff={staff ?? []} defaultMonths={settings?.package_default_months ?? 6} canWrite={canWrite} isManager={isManager} points={customer.loyalty_points} templates={(ptpls ?? []).map((x) => ({ ...x, price: Number(x.price) }))} />
           {ledger && ledger.length > 0 && (
             <section className="panel grid gap-1">
               <h2 className="font-bold">{t("Puan hareketleri")}</h2>
