@@ -1,3 +1,4 @@
+import { applyCustomerSearch } from "@/lib/customer-search";
 import { requireManager } from "@/lib/auth";
 import { addDays, todayIso } from "@/lib/format";
 
@@ -8,7 +9,7 @@ export async function GET(req: Request) {
   const q = (sp.get("q") ?? "").trim(), f = sp.get("f") ?? "";
   const today = todayIso();
   let query = supabase.from("customer_list").select("*").order("first_name").limit(10000);
-  if (q) { const like = `%${q.replace(/[%,()]/g, " ")}%`; query = query.or(`first_name.ilike.${like},last_name.ilike.${like},phone.ilike.${like}`); }
+  if (q) query = applyCustomerSearch(query, q);
   if (f === "upcoming") query = query.not("next_visit", "is", null);
   if (f === "lost") query = query.lt("last_visit", addDays(today, -60)).is("next_visit", null);
   if (f === "birthday") query = query.lte("bday_in", 7);

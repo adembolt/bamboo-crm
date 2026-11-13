@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { applyCustomerSearch } from "@/lib/customer-search";
 import { requireSession } from "@/lib/auth";
 import { fullName, initials, fmtDate, money, todayIso, addDays } from "@/lib/format";
 import { NewCustomerForm } from "./new-customer-form";
@@ -40,11 +41,7 @@ export default async function CustomersPage({ searchParams }: PageProps<"/panel/
   const today = todayIso();
 
   let query = supabase.from("customer_list").select("*", { count: "exact" });
-  if (q) {
-    const digits = q.replace(/\D/g, "");
-    const like = `%${q.replace(/[%,()]/g, " ")}%`;
-    query = digits.length >= 3 ? query.or(`phone.ilike.%${digits}%,first_name.ilike.${like},last_name.ilike.${like}`) : query.or(`first_name.ilike.${like},last_name.ilike.${like}`);
-  }
+  if (q) query = applyCustomerSearch(query, q);
   if (f === "upcoming") query = query.not("next_visit", "is", null);
   if (f === "lost") query = query.lt("last_visit", addDays(today, -60)).is("next_visit", null);
   if (f === "birthday") query = query.lte("bday_in", 7);

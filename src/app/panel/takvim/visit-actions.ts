@@ -1,5 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { applyCustomerSearch } from "@/lib/customer-search";
 import { requireOps } from "@/lib/auth";
 import { localToIso, todayIso, normalizePhone } from "@/lib/format";
 import type { VisitStatus } from "@/lib/database.types";
@@ -227,8 +228,8 @@ export async function searchAppointments(q: string) {
   const digits = term.replace(/\D/g, "");
   const parts = term.split(/\s+/).filter(Boolean);
   let cq = supabase.from("customers").select("id");
-  if (digits.length >= 4) cq = cq.ilike("phone", `%${digits.slice(-7)}%`);
-  else for (const p of parts) cq = cq.or(`first_name.ilike.%${p}%,last_name.ilike.%${p}%`);
+  if (digits.length >= 4 && parts.every((p) => /^[+\d][\d-]*$/.test(p))) cq = cq.ilike("phone", `%${digits.slice(-7)}%`);
+  else cq = applyCustomerSearch(cq, term);
   const { data: cs } = await cq.limit(40);
   const ids = (cs ?? []).map((c) => c.id);
   if (!ids.length) return [];
