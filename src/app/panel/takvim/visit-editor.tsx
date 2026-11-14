@@ -13,7 +13,8 @@ import { useT, useLang } from "@/lib/i18n/client";
 import { loadVisitForClose } from "@/app/panel/kasa/actions";
 import { CloseDialog } from "@/app/panel/kasa/close-dialog";
 import type { DayVisit } from "@/lib/queries/kasa";
-import { getVisitDetail, saveVisit, repeatVisit, checkPromo, addVisitFile, deleteVisitFile, staffDayItems, quickCustomer, type SaveLine } from "./visit-actions";
+import { getVisitDetail, saveVisit, createVisit, deleteVisit, voidVisitSale, repeatVisit, checkPromo, addVisitFile, deleteVisitFile, staffDayItems, quickCustomer, type SaveLine } from "./visit-actions";
+import { DateGridPicker } from "@/components/date-grid-picker";
 
 type Svc = { id: string; category_id: string | null; code: string | null; name_tr: string; duration_min: number; buffer_min: number; price: number };
 type Cat = { id: string; name_tr: string; sort_order: number };
@@ -32,8 +33,12 @@ let seq = 0; const k = () => `n${++seq}`;
 type SnapIn = { date: string; status: string; notes: string; color: string; anon: boolean; remind: number[]; remindConfirm: boolean; review: string; promo: string; brk: number; customerId: string | null; newName: string; lines: Line[] };
 const snapOf = (x: SnapIn) => JSON.stringify([x.date, x.status, x.notes, x.color, x.anon, x.remind, x.remindConfirm, x.review, x.promo, x.brk, x.customerId, x.newName, x.lines.map((l) => [l.id, l.serviceId, l.serviceName, l.staffId, l.time, l.duration, l.price, l.discAmt])]);
 
-export function VisitEditor(props: { visitId: string; staff: Staff[]; services: Svc[]; categories: Cat[]; staffServices: Record<string, string[]>; overrides?: Record<string, { p: number | null; d: number | null }>; openTime: string; closeTime: string; canWrite: boolean; onClose: () => void }) {
+export type NewVisitDraft = { date: string; staffId: string | null; time: string; customer?: PickedCustomer; serviceId?: string };
+
+export function VisitEditor(props: { visitId: string | null; draft?: NewVisitDraft; workCheck?: (staffId: string | null, startMin: number, dur: number, date: string) => boolean; staff: Staff[]; services: Svc[]; categories: Cat[]; staffServices: Record<string, string[]>; overrides?: Record<string, { p: number | null; d: number | null }>; openTime: string; closeTime: string; canWrite: boolean; onClose: () => void }) {
   const { visitId, staff, services, categories, canWrite, onClose } = props;
+  const isNew = !visitId;
+  const [confirmAct, setConfirmAct] = useState<"" | "void" | "delete">("");
   const router = useRouter();
   const t = useT();
   const lang = useLang();
@@ -71,6 +76,23 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
 
   // resetForm=false: yalnızca ek bilgileri (dosyalar, geçmiş, mesajlar) yeniler; kaydedilmemiş form değişikliklerine dokunmaz
   const load = useCallback(async (resetForm = true) => {
+    if (!visitId) {
+      // Yeni randevu: boş kart, takvimde tıklanan saat/uzman ile tek satır
+      const dr = props.draft ?? { date: todayIso(), staffId: staff[0]?.id ?? null, time: "10:00" };
+      const svc = dr.serviceId ? services.find((x) => x.id === dr.serviceId) : undefined;
+      const ov = svc && dr.staffId ? props.overrides?.[`${dr.staffId}:${svc.id}`] : undefined;
+      const blank = { ok: true as const, visit: { id: "", date: dr.date, status: "confirmed" as VisitStatus, source: "salon", notes: "", color: "", isAnonymous: false, remindOffsets: [1440], remindConfirm: true, reviewRequest: "auto", promoCode: "", createdAt: new Date().toISOString() },
+        customer: null, items: [], history: [], messages: [], files: [], audit: [], sale: null, forms: [] } as unknown as Detail;
+      setD(blank);
+      if (!resetForm) return;
+      const ls: Line[] = [{ key: k(), serviceId: svc?.id ?? null, serviceName: svc?.name_tr ?? "", staffId: dr.staffId, time: dr.time,
+        duration: String(svc ? (ov?.d ?? svc.duration_min) + (svc.buffer_min || 0) : 60), price: String(svc ? Number(ov?.p ?? svc.price) : 0), discPct: "0", discAmt: "0" }];
+      setDate(dr.date); setStatus("confirmed"); setNotes(""); setColor(""); setAnon(false); setRemind([1440]); setRemindConfirm(true); setReview("auto"); setPromo("");
+      setCustomer(dr.customer ?? null); setBrk(0); setLines(ls);
+      setInitialSnap(snapOf({ date: dr.date, status: "confirmed", notes: "", color: "", anon: false, remind: [1440], remindConfirm: true, review: "auto", promo: "", brk: 0, customerId: dr.customer?.id ?? null, newName: "", lines: ls }));
+      setRepeatDate(addDays(dr.date, 7)); setNewFiles([]); setDelFiles(new Set());
+      return;
+    }
     const r = await getVisitDetail(visitId);
     if (!r.ok) { setLoadErr(r.error); return; }
     setD(r);
@@ -89,6 +111,7 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
     setInitialSnap(snapOf({ date: v.date, status: v.status, notes: v.notes ?? "", color: v.color ?? "", anon: v.isAnonymous, remind: v.remindOffsets ?? [], remindConfirm: v.remindConfirm, review: v.reviewRequest || "auto", promo: v.promoCode ?? "", brk: b, customerId: r.customer?.id ?? null, newName: "", lines: ls }));
     setRepeatDate(addDays(v.date, 7));
     setNewFiles([]); setDelFiles(new Set());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visitId]);
   useEffect(() => { const id = setTimeout(() => { load(); }, 0); return () => clearTimeout(id); }, [load]);
   useEffect(() => { if (!date) return; let alive = true; staffDayItems(date).then((x) => { if (alive) setDayItems(x); }); return () => { alive = false; }; }, [date]);
@@ -150,16 +173,24 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
 
   function payload(customerId: string | null): Parameters<typeof saveVisit>[0] {
     const ls: SaveLine[] = lines.map((l) => ({ id: l.id, serviceId: l.serviceId, serviceName: l.serviceName, staffId: l.staffId, time: l.time, duration: Number(l.duration) || 0, price: Number(l.price) || 0, discount: Number(l.discAmt) || 0 }));
-    return { visitId, date, lines: ls, customerId, isAnonymous: anon, status, notes, color, remindOffsets: remind, remindConfirm, reviewRequest: review, promoCode: promo, breakMin: brk };
+    return { visitId: visitId ?? "", date, lines: ls, customerId, isAnonymous: anon, status, notes, color, remindOffsets: remind, remindConfirm, reviewRequest: review, promoCode: promo, breakMin: brk };
   }
 
   function save(after?: () => Promise<void> | void) {
     setErr(""); setMsg("");
     start(async () => {
       const cid = await resolveCustomer(); if (cid === false) return;
-      const r = await saveVisit(payload(cid));
-      if (!r.ok) { setErr(r.error); return; }
-      for (const f of newFiles) { const e = await uploadNow(f, cid); if (e) { setErr(e); return; } }
+      let vid = visitId;
+      if (!vid) {
+        const { visitId: _omit, ...rest } = payload(cid); void _omit;
+        const r = await createVisit(rest);
+        if (!r.ok) { setErr(r.error); return; }
+        vid = r.visitId;
+      } else {
+        const r = await saveVisit(payload(cid));
+        if (!r.ok) { setErr(r.error); return; }
+      }
+      for (const f of newFiles) { const e = await uploadNow(f, cid, vid); if (e) { setErr(e); return; } }
       for (const id of delFiles) await deleteVisitFile(id);
       setNewFiles([]); setDelFiles(new Set()); setInitialSnap(snap);
       router.refresh();
@@ -169,12 +200,31 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
   // Durum düğmeleri yalnızca formu değiştirir; Kaydet'e basılınca yazılır
   function flag(s: VisitStatus) { setErr(""); setStatus((cur) => (cur === s ? "confirmed" : s)); }
   function createSale() {
-    const open = async () => { const r = await loadVisitForClose(visitId); if (!r.ok) setErr(r.error); else setClosing(r.visit); };
+    const open = async () => { if (!visitId) return; const r = await loadVisitForClose(visitId); if (!r.ok) setErr(r.error); else setClosing(r.visit); };
     if (dirty) { if (confirm(t("Kaydedilmemiş değişiklikler var. Önce kaydedilip ödeme ekranı açılsın mı?"))) save(open); }
     else start(open);
   }
   function doRepeat() {
-    setErr(""); start(async () => { const r = await repeatVisit(visitId, repeatDate); if (!r.ok) setErr(r.error); else { setMsg(t("Randevu {date} tarihine kopyalandı.", { date: fmtDate(r.date) })); setPanel(""); router.refresh(); await load(false); } });
+    if (!visitId) return; setErr(""); start(async () => { const r = await repeatVisit(visitId, repeatDate); if (!r.ok) setErr(r.error); else { setMsg(t("Randevu {date} tarihine kopyalandı.", { date: fmtDate(r.date) })); setPanel(""); router.refresh(); await load(false); } });
+  }
+  function doVoid() {
+    if (!visitId) return;
+    setErr(""); setMsg(""); start(async () => {
+      const r = await voidVisitSale(visitId);
+      setConfirmAct("");
+      if (!r.ok) { setErr(r.error); return; }
+      setMsg(t("Ödeme iptal edildi. Randevu artık düzenlenebilir."));
+      router.refresh(); await load();
+    });
+  }
+  function doDelete() {
+    if (!visitId) return;
+    setErr(""); setMsg(""); start(async () => {
+      const r = await deleteVisit(visitId);
+      setConfirmAct("");
+      if (!r.ok) { setErr(r.error); return; }
+      router.refresh(); onClose();
+    });
   }
   function applyPromo() {
     setErr(""); setPromoInfo(""); start(async () => {
@@ -188,12 +238,12 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
     if (f.size > 15 * 1024 * 1024) { setErr(t("Dosya 15 MB'den büyük olamaz.")); return; }
     setNewFiles((x) => [...x, f]);
   }
-  async function uploadNow(f: File, customerId: string | null): Promise<string | null> {
+  async function uploadNow(f: File, customerId: string | null, vid: string): Promise<string | null> {
     const sb = createClient();
-    const path = `${visitId}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
+    const path = `${vid}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
     const { error } = await sb.storage.from("visit-files").upload(path, f, { contentType: f.type || undefined });
     if (error) return t("Yükleme başarısız: {e}", { e: error.message });
-    const r = await addVisitFile({ visitId, customerId, path, name: f.name, mime: f.type, size: f.size });
+    const r = await addVisitFile({ visitId: vid, customerId, path, name: f.name, mime: f.type, size: f.size });
     return r.ok ? null : r.error;
   }
 
@@ -202,12 +252,13 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
 
   const c = d.customer;
   return (
-    <Modal wide title={t("Randevuyu düzenle")} onClose={tryClose} headerExtra={<>{dirty && <span className="pill warn">{t("Kaydedilmedi")}</span>}<span className={`pill ${status === "no_show" || status === "cancelled" ? "bad" : status === "pending" ? "warn" : "good"}`}>{t(ST[status])}</span></>}>
+    <Modal wide title={isNew ? t("Yeni randevu") : t("Randevuyu düzenle")} onClose={tryClose} headerExtra={<>{dirty && <span className="pill warn">{t("Kaydedilmedi")}</span>}<span className={`pill ${status === "no_show" || status === "cancelled" ? "bad" : status === "pending" ? "warn" : "good"}`}>{t(ST[status])}</span></>}>
       <div className="grid gap-4">
         {/* Tarih */}
         <div className="flex flex-wrap items-end gap-3">
           <label className="f">{t("Tarih")}<span className="inp"><input type="date" value={date} disabled={locked} onChange={(e) => setDate(e.target.value)} /></span></label>
-          {sale && <span className="pill good">{t("Ödendi · {sum} — değiştirmek için kasadan satışı iptal edin", { sum: money(sale.total) })}</span>}
+          {sale && <span className="pill good">{t("Ödendi · {sum}", { sum: money(sale.total) })}</span>}
+          {sale && canWrite && confirmAct !== "void" && <button type="button" className="btn ghost sm text-bad" disabled={pending} onClick={() => { setErr(""); setConfirmAct("void"); }}>{t("Ödemeyi iptal et")}</button>}
         </div>
 
         {/* Hizmet satırları */}
@@ -272,15 +323,15 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
               </div>
             )}
             {c?.health_notes && !anon && <p className="text-xs rounded-lg bg-warn-bg px-2 py-1"><b>{t("Sağlık notu:")}</b> {c.health_notes}</p>}
-            {c && !anon && customer?.id === c.id && <FormHints customerId={c.id} visitId={visitId} flags={c.health_flags ?? []} forms={d.forms} services={lines.map((l) => l.serviceName)} />}
+            {c && !anon && customer?.id === c.id && <FormHints customerId={c.id} visitId={visitId ?? ""} flags={c.health_flags ?? []} forms={d.forms} services={lines.map((l) => l.serviceName)} />}
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={anon} disabled={locked} onChange={(e) => setAnon(e.target.checked)} /> {t("Anonim")}</label>
           </div>
           <div className="grid gap-2 content-start">
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={status !== "pending"} disabled={locked || ["arrived", "completed", "no_show", "cancelled"].includes(status)} onChange={(e) => setStatus(e.target.checked ? "confirmed" : "pending")} /> {t("Onaylandı")}</label>
-            <div className="grid grid-cols-2 gap-2">
+            {!isNew && <div className="grid grid-cols-2 gap-2">
               <button type="button" className={`btn ${status === "arrived" ? "" : "ghost"}`} disabled={locked || pending || status === "completed"} onClick={() => flag("arrived")}>{t("Geldi")}</button>
               <button type="button" className={`btn ${status === "no_show" ? "danger" : "ghost"}`} disabled={locked || pending || status === "completed"} onClick={() => flag("no_show")}>{t("Gelmedi")}</button>
-            </div>
+            </div>}
           </div>
         </div>
 
@@ -303,7 +354,7 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
             <div className="text-xs font-semibold text-muted">{t("Hatırlatma bildirimleri")}</div>
             <div className="flex flex-wrap gap-1.5">{REMIND.map((o) => { const on = remind.includes(o.v); return <button key={o.v} type="button" disabled={locked} className={`pill ${on ? "good" : ""}`} onClick={() => setRemind(on ? remind.filter((x) => x !== o.v) : [...remind, o.v].sort((a, b) => a - b))}>{on ? "✓ " : ""}{t(o.l)}</button>; })}</div>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={remindConfirm} disabled={locked} onChange={(e) => setRemindConfirm(e.target.checked)} /> {t("Onay iste (müşteri “geliyorum” desin)")}</label>
-            <button type="button" className="text-xs text-green font-semibold hover:underline justify-self-start" onClick={() => setPanel(panel === "notif" ? "" : "notif")}>{t("Bildirim geçmişi ({n})", { n: d.messages.length })}</button>
+            {!isNew && <button type="button" className="text-xs text-green font-semibold hover:underline justify-self-start" onClick={() => setPanel(panel === "notif" ? "" : "notif")}>{t("Bildirim geçmişi ({n})", { n: d.messages.length })}</button>}
           </div>
           <label className="f content-start">{t("Yorum ve bahşiş isteği")}<span className="inp"><select value={review} disabled={locked} onChange={(e) => setReview(e.target.value)}>{REVIEW.map((o) => <option key={o.v} value={o.v}>{t(o.l)}</option>)}</select></span></label>
         </div>
@@ -354,24 +405,45 @@ export function VisitEditor(props: { visitId: string; staff: Staff[]; services: 
           </div>
         )}
         {panel === "repeat" && (
-          <div className="rounded-xl border border-line p-3 flex flex-wrap items-end gap-2">
-            <label className="f">{t("Yeni tarih")}<span className="inp"><input type="date" min={todayIso()} value={repeatDate} onChange={(e) => setRepeatDate(e.target.value)} /></span></label>
-            {[7, 14, 21, 28].map((n) => <button key={n} type="button" className="btn ghost sm" onClick={() => setRepeatDate(addDays(date, n))}>{t("+{n} hafta", { n: n / 7 })}</button>)}
-            <button type="button" className="btn sm" disabled={pending || !repeatDate} onClick={doRepeat}>{t("Aynı saat ve uzmanla kopyala")}</button>
+          <div className="rounded-xl border border-line p-3 grid md:grid-cols-[auto_1fr] gap-4 items-start">
+            <DateGridPicker value={repeatDate} onChange={setRepeatDate} min={todayIso()} mark={date} />
+            <div className="grid gap-3 content-start">
+              <div className="text-xs font-semibold text-muted">{t("Yeni tarih")}</div>
+              <b className="text-lg">{repeatDate ? fmtDate(repeatDate) : "—"}</b>
+              <div className="flex flex-wrap gap-2">{[7, 14, 21, 28].map((n) => <button key={n} type="button" className="btn ghost sm" onClick={() => setRepeatDate(addDays(date, n))}>{t("+{n} hafta", { n: n / 7 })}</button>)}</div>
+              <button type="button" className="btn justify-self-start" disabled={pending || !repeatDate} onClick={doRepeat}>{t("Aynı saat ve uzmanla kopyala")}</button>
+            </div>
           </div>
         )}
 
+        {isNew && props.workCheck && lines.some((l) => /^\d{2}:\d{2}$/.test(l.time) && date === props.draft?.date && !props.workCheck!(l.staffId, toMin(l.time), Number(l.duration) || 0, date)) && <p className="pill" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>⚠ {t("Uzman bu saatte çalışmıyor veya izinli. Yine de kaydedebilirsiniz.")}</p>}
+        {confirmAct === "void" && sale && (
+          <div role="alert" className="rounded-xl border border-bad p-3 grid gap-2 bg-surface">
+            <b>{t("Ödeme iptal edilsin mi?")}</b>
+            <span className="text-sm text-muted">{t("{sum} tutarındaki satış kasadan silinir. Paketten düşülen seans, hediye çeki, bakiye ve puanlar geri alınır. Randevu “Geldi” durumuna döner.", { sum: money(sale.total) })}</span>
+            <div className="flex gap-2 justify-end"><button type="button" className="btn ghost" disabled={pending} onClick={() => setConfirmAct("")}>{t("Vazgeç")}</button><button type="button" className="btn danger" disabled={pending} onClick={doVoid}>{pending ? t("İşleniyor…") : t("Evet, ödemeyi iptal et")}</button></div>
+          </div>
+        )}
+        {confirmAct === "delete" && (
+          <div role="alert" className="rounded-xl border border-bad p-3 grid gap-2 bg-surface">
+            <b>{t("Randevu tamamen silinsin mi?")}</b>
+            <span className="text-sm text-muted">{t("Randevu ve tüm hizmet satırları kalıcı olarak silinir, geri alınamaz. Müşteri yalnızca gelmeyecekse silmek yerine “Randevuyu iptal et”i kullanın.")}</span>
+            <div className="flex gap-2 justify-end"><button type="button" className="btn ghost" disabled={pending} onClick={() => setConfirmAct("")}>{t("Vazgeç")}</button><button type="button" className="btn danger" disabled={pending} onClick={doDelete}>{pending ? t("İşleniyor…") : t("Evet, kalıcı olarak sil")}</button></div>
+          </div>
+        )}
         {err && <p className="pill bad">{err}</p>}
         {msg && <p className="pill good">{msg}</p>}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-          <button type="button" className="text-sm text-green font-semibold hover:underline" onClick={() => setPanel(panel === "audit" ? "" : "audit")}>{t("Değişiklik geçmişi")}</button>
+          {!isNew && <button type="button" className="text-sm text-green font-semibold hover:underline" onClick={() => setPanel(panel === "audit" ? "" : "audit")}>{t("Değişiklik geçmişi")}</button>}
+          {!isNew && canWrite && !sale && confirmAct !== "delete" && <button type="button" className="text-sm text-bad hover:underline px-2" disabled={pending} onClick={() => { setErr(""); setConfirmAct("delete"); }}>🗑 {t("Randevuyu sil")}</button>}
           <span className="flex-1" />
-          {canWrite && !sale && status !== "cancelled" && <button type="button" className="text-sm text-bad font-semibold hover:underline px-2" disabled={pending} onClick={() => flag("cancelled")}>{t("Randevuyu iptal et")}</button>}
-          {canWrite && !sale && status === "cancelled" && !initialSnap.includes('"cancelled"') && <button type="button" className="text-sm text-green font-semibold hover:underline px-2" onClick={() => flag("cancelled")}>{t("İptali geri al")}</button>}
-          {canWrite && <button type="button" className="btn ghost" disabled={pending} onClick={() => setPanel(panel === "repeat" ? "" : "repeat")}>{t("Randevuyu tekrarla")}</button>}
-          {canWrite && !sale && status !== "cancelled" && <button type="button" className="btn" style={{ background: "var(--good)" }} disabled={pending} onClick={createSale}>{t("Satış oluştur")}</button>}
-          {!locked && <button type="button" className="btn" disabled={pending || !dirty} onClick={() => save()}>{pending ? t("Kaydediliyor…") : dirty ? t("Kaydet") : t("Kaydedildi")}</button>}
+          {isNew && <button type="button" className="btn ghost" disabled={pending} onClick={tryClose}>{t("Vazgeç")}</button>}
+          {!isNew && canWrite && !sale && status !== "cancelled" && <button type="button" className="text-sm text-bad font-semibold hover:underline px-2" disabled={pending} onClick={() => flag("cancelled")}>{t("Randevuyu iptal et")}</button>}
+          {!isNew && canWrite && !sale && status === "cancelled" && !initialSnap.includes('"cancelled"') && <button type="button" className="text-sm text-green font-semibold hover:underline px-2" onClick={() => flag("cancelled")}>{t("İptali geri al")}</button>}
+          {!isNew && canWrite && <button type="button" className="btn ghost" disabled={pending} onClick={() => setPanel(panel === "repeat" ? "" : "repeat")}>{t("Randevuyu tekrarla")}</button>}
+          {!isNew && canWrite && !sale && status !== "cancelled" && <button type="button" className="btn" style={{ background: "var(--good)" }} disabled={pending} onClick={createSale}>{t("Satış oluştur")}</button>}
+          {!locked && <button type="button" className="btn" disabled={pending || (!dirty && !isNew)} onClick={() => save()}>{pending ? t("Kaydediliyor…") : isNew ? t("Randevuyu kaydet") : dirty ? t("Kaydet") : t("Kaydedildi")}</button>}
         </div>
       </div>
       {topUp && c && <TopUpDialog customerId={c.id} customerName={`${c.first_name} ${c.last_name}`.trim()} balance={Number(c.balance) + extraBalance} onClose={() => setTopUp(false)} onDone={(amt) => { setExtraBalance((b) => b + amt); setTopUp(false); router.refresh(); }} />}

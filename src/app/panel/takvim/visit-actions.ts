@@ -1,10 +1,11 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { applyCustomerSearch } from "@/lib/customer-search";
-import { requireOps } from "@/lib/auth";
+import { requireOps, requireManager } from "@/lib/auth";
 import { localToIso, todayIso, normalizePhone } from "@/lib/format";
 import type { VisitStatus } from "@/lib/database.types";
 import { getT } from "@/lib/i18n/server";
+import { pickResource } from "@/lib/resources";
 
 const ISTANBUL = (iso: string) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Istanbul" }).format(new Date(iso));
 const HHMM = (iso: string) => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/Istanbul" }).format(new Date(iso));
@@ -123,6 +124,61 @@ export async function saveVisit(input: SaveVisitInput) {
   return { ok: true as const };
 }
 
+/** Yeni randevu: büyük düzenleme penceresinden doğrudan oluşturur.
+ *  Müşterinin o gün başka randevusu varsa hizmetler o randevuya eklenir (tek kart). */
+export async function createVisit(input: Omit<SaveVisitInput, "visitId">) {
+  const { supabase, user } = await requireOps();
+  const t = await getT();
+  const lines = input.lines.filter((l) => l.serviceName.trim());
+  if (!lines.length) return { ok: false as const, error: t("En az bir hizmet olmalı.") };
+  for (const l of lines) if (!/^\d{2}:\d{2}$/.test(l.time) || !(l.duration > 0)) return { ok: false as const, error: t("Saat ve süre geçerli olmalı.") };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { ok: false as const, error: t("Tarih geçersiz.") };
+  const customerId = input.isAnonymous ? null : input.customerId;
+  if (!customerId && !input.isAnonymous) return { ok: false as const, error: t("Müşteri seçin veya yeni müşteri girin.") };
+
+  let visitId: string | null = null, created = false;
+  if (customerId) {
+    const { data: ex } = await supabase.from("visits").select("id").eq("customer_id", customerId).eq("visit_date", input.date).neq("status", "cancelled").maybeSingle();
+    visitId = ex?.id ?? null;
+  }
+  if (!visitId) {
+    const { data: v, error } = await supabase.from("visits").insert({
+      customer_id: customerId, is_anonymous: input.isAnonymous, visit_date: input.date, status: input.status === "pending" ? "pending" : "confirmed", source: "salon",
+      notes: input.notes, color: input.color, remind_offsets: input.remindOffsets, remind_confirm: input.remindConfirm,
+      review_request: input.reviewRequest, promo_code: input.promoCode.trim().toUpperCase(), created_by: user.id,
+    }).select("id").single();
+    if (error || !v) return { ok: false as const, error: t("Ziyaret açılamadı: {msg}", { msg: error?.message ?? "" }) };
+    visitId = v.id; created = true;
+  }
+
+  const order = lines.map((l, i) => ({ l, i })).sort((a, b) => a.l.time.localeCompare(b.l.time));
+  const lastIdx = order[order.length - 1].i;
+  const inserted: string[] = [];
+  const undo = async () => {
+    if (inserted.length) await supabase.from("visit_items").delete().in("id", inserted);
+    if (created) await supabase.from("visits").delete().eq("id", visitId!);
+  };
+  for (const [i, l] of lines.entries()) {
+    const brk = i === lastIdx ? Math.max(0, input.breakMin) : 0;
+    const starts = localToIso(input.date, l.time);
+    const ends = new Date(new Date(starts).getTime() + (l.duration + brk) * 60000).toISOString();
+    const room = await pickResource(supabase, l.serviceId, starts, ends);
+    if (!room.ok) { await undo(); return { ok: false as const, error: t("Bu saatte kabin dolu: {name}", { name: room.names }) }; }
+    const { data: it, error } = await supabase.from("visit_items").insert({
+      visit_id: visitId, service_id: l.serviceId, service_name: l.serviceName.trim().slice(0, 200), staff_id: l.staffId, starts_at: starts, ends_at: ends,
+      resource_id: room.resourceId, price: Math.max(0, l.price), discount: Math.max(0, Math.min(l.price, l.discount)), break_min: brk, status: "confirmed",
+    }).select("id").single();
+    if (error || !it) {
+      await undo();
+      return { ok: false as const, error: error && /overlap|23P01/.test(error.message + error.code) ? t("{time} — bu personelin o saatte başka randevusu var.", { time: l.time }) : t("Kalem eklenemedi: {msg}", { msg: error?.message ?? "" }) };
+    }
+    inserted.push(it.id);
+  }
+  await audit(created ? "oluşturuldu" : "hizmet eklendi", visitId, lines.map((l) => `${l.time} ${l.serviceName} ${l.price - l.discount}`));
+  revalidatePath("/panel/takvim"); revalidatePath("/panel");
+  return { ok: true as const, visitId: visitId!, merged: !created };
+}
+
 export async function setVisitFlag(visitId: string, status: VisitStatus) {
   const { supabase } = await requireOps();
   const { data: v } = await supabase.from("visits").select("status, customer_id").eq("id", visitId).single();
@@ -136,6 +192,49 @@ export async function setVisitFlag(visitId: string, status: VisitStatus) {
     await supabase.from("customers").update({ no_show_count: (c?.no_show_count ?? 0) + 1 }).eq("id", v.customer_id);
   }
   await audit({ confirmed: "onaylandı", pending: "onay bekliyor", arrived: "geldi", no_show: "gelmedi", cancelled: "iptal edildi", completed: "tamamlandı" }[status] ?? status, visitId, { from: v?.status, to: status });
+  revalidatePath("/panel/takvim"); revalidatePath("/panel");
+  return { ok: true as const };
+}
+
+/** Randevuyu tamamen siler (yalnızca yönetici). Ödemesi alınmış ya da tedavi kaydı olan randevu silinmez. */
+export async function deleteVisit(visitId: string) {
+  let s;
+  try { s = await requireManager(); } catch (e) { return { ok: false as const, error: (e as Error).message }; }
+  const { supabase } = s;
+  const t = await getT();
+  const { data: v } = await supabase.from("visits").select("visit_date, status, customer:customers(first_name, last_name), items:visit_items(id, service_name, starts_at, price, discount)").eq("id", visitId).single();
+  if (!v) return { ok: false as const, error: t("Ziyaret bulunamadı.") };
+  const { count: paid } = await supabase.from("sales").select("id", { count: "exact", head: true }).eq("visit_id", visitId);
+  if (paid) return { ok: false as const, error: t("Ödemesi alınmış randevu silinemez. Önce ödemeyi iptal edin.") };
+  const itemIds = v.items.map((i) => i.id);
+  if (itemIds.length) {
+    // treatment_logs tipli şemada yok; yalnızca sayım için tipsiz sorgu
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { count: logs } = await (supabase as any).from("treatment_logs").select("id", { count: "exact", head: true }).in("visit_item_id", itemIds) as { count: number | null };
+    if (logs) return { ok: false as const, error: t("Bu randevuda tedavi kaydı var; silinemez. Bunun yerine iptal edin.") };
+  }
+  // Ekli dosyaları depodan da kaldır (satırlar randevuyla birlikte silinir)
+  const { data: files } = await supabase.from("visit_files").select("storage_path").eq("visit_id", visitId);
+  if (files?.length) await supabase.storage.from("visit-files").remove(files.map((f) => f.storage_path));
+  const { error } = await supabase.from("visits").delete().eq("id", visitId);
+  if (error) return { ok: false as const, error: error.message };
+  const who = v.customer ? `${v.customer.first_name} ${v.customer.last_name}`.trim() : "anonim";
+  await audit("silindi", visitId, [`${v.visit_date} · ${who}`, ...v.items.map((i) => `${HHMM(i.starts_at)} ${i.service_name} ${Number(i.price) - Number(i.discount)}`)]);
+  revalidatePath("/panel/takvim"); revalidatePath("/panel");
+  return { ok: true as const };
+}
+
+/** Randevu kartından ödemeyi iptal eder (kasadaki satış iptaliyle aynı: paket, hediye çeki, bakiye, puan geri alınır) */
+export async function voidVisitSale(visitId: string) {
+  try { await requireManager(); } catch (e) { return { ok: false as const, error: (e as Error).message }; }
+  const { supabase } = await requireOps();
+  const t = await getT();
+  const { data: sale } = await supabase.from("sales").select("id, total").eq("visit_id", visitId).maybeSingle();
+  if (!sale) return { ok: false as const, error: t("Bu randevunun ödemesi yok.") };
+  const { voidSale } = await import("@/app/panel/kasa/actions");
+  const r = await voidSale(sale.id);
+  if (!r.ok) return r;
+  await audit("ödeme iptal edildi", visitId, { tutar: Number(sale.total) });
   revalidatePath("/panel/takvim"); revalidatePath("/panel");
   return { ok: true as const };
 }

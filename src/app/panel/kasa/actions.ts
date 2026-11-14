@@ -123,7 +123,7 @@ export async function closeVisit(input: CloseVisitInput) {
 }
 
 export async function voidSale(saleId: string) {
-  const { supabase } = await requireManager();
+  const { supabase, user } = await requireManager();
   const { data: sale } = await supabase.from("sales").select("visit_id, customer_id").eq("id", saleId).single();
   // Geri al: paket seansları, hediye çeki bakiyesi, puanlar
   if (sale?.visit_id) {
@@ -138,10 +138,20 @@ export async function voidSale(saleId: string) {
   for (const u of uses ?? []) { const { data: c } = await supabase.from("gift_cards").select("balance").eq("id", u.gift_card_id).single(); if (c) await supabase.from("gift_cards").update({ balance: Number(c.balance) + Number(u.amount) }).eq("id", u.gift_card_id); }
   const { data: bl } = await supabase.from("balance_ledger").select("amount").eq("sale_id", saleId);
   const bback = (bl ?? []).reduce((s, l) => s + Number(l.amount), 0);
-  if (bback && sale?.customer_id) { const { data: cb } = await supabase.from("customers").select("balance").eq("id", sale.customer_id).single(); await supabase.from("customers").update({ balance: Number(cb?.balance ?? 0) - bback }).eq("id", sale.customer_id); }
+  if (bback && sale?.customer_id) {
+    const { data: cb } = await supabase.from("customers").select("balance").eq("id", sale.customer_id).single();
+    await supabase.from("customers").update({ balance: Number(cb?.balance ?? 0) - bback }).eq("id", sale.customer_id);
+    // bakiye geçmişine karşı kayıt (geçmiş toplamı güncel bakiyeyle tutarlı kalsın)
+    await supabase.from("balance_ledger").insert({ customer_id: sale.customer_id, amount: -bback, reason: "Satış iptal edildi", created_by: user.id });
+  }
   const { data: led } = await supabase.from("loyalty_ledger").select("points").eq("sale_id", saleId);
   const back = (led ?? []).reduce((s, l) => s + l.points, 0);
-  if (back && sale?.customer_id) { const { data: cu } = await supabase.from("customers").select("loyalty_points").eq("id", sale.customer_id).single(); await supabase.from("customers").update({ loyalty_points: (cu?.loyalty_points ?? 0) - back }).eq("id", sale.customer_id); }
+  if (back && sale?.customer_id) {
+    const { data: cu } = await supabase.from("customers").select("loyalty_points").eq("id", sale.customer_id).single();
+    await supabase.from("customers").update({ loyalty_points: (cu?.loyalty_points ?? 0) - back }).eq("id", sale.customer_id);
+    // puan geçmişine karşı kayıt (geçmiş toplamı güncel puanla tutarlı kalsın)
+    await supabase.from("loyalty_ledger").insert({ customer_id: sale.customer_id, points: -back, reason: "Satış iptal edildi" });
+  }
   // Paket / hediye çeki satışı iptal: paket pasife, kullanılmamış çek silinir
   await supabase.from("customer_packages").update({ is_active: false, notes: "Satış iptal edildi" }).eq("sale_id", saleId);
   const { data: gcs } = await supabase.from("gift_cards").select("id, initial_amount, balance").eq("sale_id", saleId);

@@ -5,8 +5,8 @@ import type { Staff } from "@/lib/database.types";
 import type { DayItem } from "@/lib/queries/calendar";
 import type { DayVisit } from "@/lib/queries/kasa";
 import { minutesOfDay, hhmm, money, fmtTime, fullName, duration, todayIso, fmtDate, fmtWeekdayShort } from "@/lib/format";
-import { addVisitItem, moveItem, resizeItem, type NewItemInput } from "./actions";
-import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker";
+import { moveItem, resizeItem } from "./actions";
+import type { PickedCustomer } from "@/components/customer-picker";
 import { VisitEditor } from "./visit-editor";
 import { setVisitFlag } from "./visit-actions";
 import { loadVisitForClose } from "@/app/panel/kasa/actions";
@@ -453,18 +453,20 @@ export function DayCalendar(props: {
       {hoursEdit && <DayHoursEditor key={`${hoursEdit.staffId}${hoursEdit.date}`} target={hoursEdit} onClose={() => setHoursEdit(null)} />}
 
       {draft && (
-        <NewItemDialog
-          workCheck={(sid, m, dd) => workCheck(sid, m, dd, draft.date ?? date)}
-          date={draft.date ?? date}
-          draft={draft}
+        <VisitEditor
+          key={`new-${draft.date ?? date}-${draft.staffId}-${draft.startHHMM}`}
+          visitId={null}
+          draft={{ date: draft.date ?? date, staffId: draft.staffId, time: draft.startHHMM, customer: draft.customer, serviceId: draft.serviceId }}
+          workCheck={workCheck}
           staff={staff}
           services={props.services}
           categories={props.categories}
           staffServices={props.staffServices}
           overrides={props.overrides}
-          slotMinutes={settings.slot_minutes}
+          openTime={hhmm(openMin)}
+          closeTime={hhmm(Math.min(closeMin, 1439))}
+          canWrite={canWrite}
           onClose={() => setDraft(null)}
-          onCreated={(visitId) => { setDraft(null); setSelectedVisit(visitId); }}
         />
       )}
     </div>
@@ -474,140 +476,6 @@ export function DayCalendar(props: {
 function toMin(t: string) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + (m || 0);
-}
-
-/* ---------------------------------------------------------------
-   Ziyaret kartı: müşterinin o günkü TÜM hizmetleri + toplam
-   --------------------------------------------------------------- */
-function NewItemDialog(props: {
-  date: string;
-  draft: { staffId: string | null; startHHMM: string; visitId?: string; customer?: PickedCustomer; serviceId?: string };
-  staff: Staff[];
-  services: ServiceLite[];
-  categories: CategoryLite[];
-  staffServices: Record<string, string[]>;
-  overrides?: Record<string, { p: number | null; d: number | null }>;
-  slotMinutes: number;
-  workCheck: (staffId: string | null, startMin: number, dur: number) => boolean;
-  onClose: () => void;
-  onCreated: (visitId: string) => void;
-}) {
-  const router = useRouter();
-  const t = useT();
-  const lang = useLang();
-  const [pending, start] = useTransition();
-  const [err, setErr] = useState("");
-  const [staffId, setStaffId] = useState<string | null>(props.draft.staffId);
-  const [time, setTime] = useState(props.draft.startHHMM);
-  const preset = props.draft.serviceId ? props.services.find((s) => s.id === props.draft.serviceId) : undefined;
-  const [q, setQ] = useState(preset ? (preset.code ?? preset.name_tr) : "");
-  const [cat, setCat] = useState<string>("");
-  const [serviceId, setServiceId] = useState<string>(props.draft.serviceId ?? "");
-  const [price, setPrice] = useState<string>("");
-  const [notes, setNotes] = useState("");
-  const [customer, setCustomer] = useState<PickedCustomer | null>(props.draft.customer ?? null);
-  const [newCustomer, setNewCustomer] = useState<{ first_name: string; last_name: string; phone: string } | null>(null);
-
-  const filtered = useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    const allowed = staffId && props.staffServices[staffId]?.length ? new Set(props.staffServices[staffId]) : null;
-    return props.services
-      .filter((s) => !allowed || allowed.has(s.id))
-      .filter((s) => !cat || s.category_id === cat)
-      .filter((s) => !qq || s.name_tr.toLowerCase().includes(qq) || s.name_en.toLowerCase().includes(qq) || (s.name_ru ?? "").toLowerCase().includes(qq) || (s.code ?? "").includes(qq))
-      .slice(0, 60);
-  }, [props.services, props.staffServices, staffId, q, cat]);
-
-  const baseService = props.services.find((s) => s.id === serviceId);
-  const ov = baseService && staffId ? props.overrides?.[`${staffId}:${baseService.id}`] : undefined;
-  const service = baseService ? { ...baseService, price: ov?.p ?? baseService.price, duration_min: ov?.d ?? baseService.duration_min } : undefined;
-
-  function submit() {
-    if (!service) return setErr(t("Bir hizmet seçin."));
-    if (!customer && !newCustomer?.first_name) return setErr(t("Müşteri seçin veya yeni müşteri girin."));
-    setErr("");
-    const input: NewItemInput = {
-      date: props.date, startHHMM: time, staffId, serviceId: service.id,
-      price: price !== "" ? Number(price) : undefined, notes,
-      customerId: customer?.id ?? null, newCustomer: customer ? null : newCustomer, visitId: props.draft.visitId ?? null,
-    };
-    start(async () => {
-      const r = await addVisitItem(input);
-      if (!r.ok) return setErr(r.error);
-      router.refresh();
-      props.onCreated(r.visitId);
-    });
-  }
-
-  return (
-    <Modal onClose={props.onClose} title={props.draft.visitId ? t("Ziyarete hizmet ekle") : t("Yeni randevu")}>
-      <div className="grid gap-4">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="f">{t("Saat")}
-            <span className="inp"><input type="time" step={props.slotMinutes * 60} value={time} onChange={(e) => setTime(e.target.value)} /></span>
-          </label>
-          <label className="f">{t("Personel")}
-            <span className="inp">
-              <select value={staffId ?? ""} onChange={(e) => setStaffId(e.target.value || null)}>
-                <option value="">{t("Atanmamış")}</option>
-                {props.staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-              </select>
-            </span>
-          </label>
-        </div>
-
-        {!props.draft.visitId && (
-          <div className="grid gap-2">
-            <div className="eyebrow">{t("Müşteri")}</div>
-            <CustomerPicker value={customer} onChange={setCustomer} onNew={setNewCustomer} />
-          </div>
-        )}
-
-        <div className="grid gap-2">
-          <div className="eyebrow">{t("Hizmet")}</div>
-          <div className="grid grid-cols-[1fr_auto] gap-2">
-            <span className="inp"><input placeholder={t("Hizmet adı veya kod ara…")} value={q} onChange={(e) => setQ(e.target.value)} /></span>
-            <span className="inp">
-              <select value={cat} onChange={(e) => setCat(e.target.value)}>
-                <option value="">{t("Tüm kategoriler")}</option>
-                {props.categories.map((c) => <option key={c.id} value={c.id}>{localName(c, lang)}</option>)}
-              </select>
-            </span>
-          </div>
-          <div className="max-h-56 overflow-y-auto rounded-xl border border-line divide-y divide-line">
-            {filtered.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => { setServiceId(s.id); setPrice(""); }}
-                className={`w-full text-left px-3 py-2 grid grid-cols-[1fr_auto] gap-2 items-center ${serviceId === s.id ? "bg-green-soft" : "hover:bg-sunk"}`}
-              >
-                <span className="min-w-0"><span className="font-semibold text-sm block truncate">{localName(s, lang)}</span><span className="text-[11px] text-muted">{s.code ? `#${s.code} · ` : ""}{duration(s.duration_min, lang)}</span></span>
-                <span className="num text-sm font-bold">{money(s.price)}</span>
-              </button>
-            ))}
-            {!filtered.length && <div className="px-3 py-4 text-sm text-muted">{t("Sonuç yok.")}</div>}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <label className="f">{service ? t("Fiyat (boş = liste fiyatı {price})", { price: money(service.price) }) : t("Fiyat (boş = liste fiyatı)")}
-            <span className="inp"><input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={service ? String(service.price) : ""} /></span>
-          </label>
-          <label className="f">{t("Not")}
-            <span className="inp"><input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("ör. 3. seans")} /></span>
-          </label>
-        </div>
-
-        {!props.workCheck(staffId, toMin(time), service?.duration_min ?? props.slotMinutes) && <p className="pill" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>⚠ {t("Uzman bu saatte çalışmıyor veya izinli. Yine de kaydedebilirsiniz.")}</p>}
-        {err && <p className="pill bad">{err}</p>}
-        <div className="flex gap-2 justify-end">
-          <button className="btn ghost" onClick={props.onClose} type="button">{t("Vazgeç")}</button>
-          <button className="btn" onClick={submit} disabled={pending} type="button">{pending ? t("Kaydediliyor…") : t("Kaydet")}</button>
-        </div>
-      </div>
-    </Modal>
-  );
 }
 
 export function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {

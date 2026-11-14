@@ -152,5 +152,22 @@ const d: Record<string, [string, string]> = {
   "ör. 10 seans masaj için ön ödeme": ["e.g. prepayment for 10 massage sessions", "напр. предоплата за 10 сеансов массажа"],
   "Vazgeç": ["Cancel", "Отмена"],
   "{sum} yükle": ["Top up {sum}", "Пополнить на {sum}"],
+  // randevu: ödeme iptali, silme, yeni randevu, büyük takvim
+  "Bu randevunun günü": ["This appointment's day", "День этой записи"],
+  "Ödemesi alınmış randevu silinemez. Önce ödemeyi iptal edin.": ["A paid appointment can't be deleted. Cancel the payment first.", "Оплаченную запись нельзя удалить. Сначала отмените оплату."],
+  "Bu randevuda tedavi kaydı var; silinemez. Bunun yerine iptal edin.": ["This appointment has treatment records and can't be deleted. Cancel it instead.", "В этой записи есть записи о процедурах, удалить нельзя. Отмените её."],
+  "Bu randevunun ödemesi yok.": ["This appointment has no payment.", "У этой записи нет оплаты."],
+  "Ödeme iptal edildi. Randevu artık düzenlenebilir.": ["Payment cancelled. The appointment can be edited again.", "Оплата отменена. Запись снова можно редактировать."],
+  "Ödendi · {sum}": ["Paid · {sum}", "Оплачено · {sum}"],
+  "Ödemeyi iptal et": ["Cancel payment", "Отменить оплату"],
+  "Ödeme iptal edilsin mi?": ["Cancel this payment?", "Отменить оплату?"],
+  "{sum} tutarındaki satış kasadan silinir. Paketten düşülen seans, hediye çeki, bakiye ve puanlar geri alınır. Randevu “Geldi” durumuna döner.": ["The {sum} sale is removed from the till. Package sessions, gift card, balance and points are restored. The appointment returns to “Arrived”.", "Продажа на {sum} удаляется из кассы. Сеансы пакета, сертификат, баланс и баллы возвращаются. Запись получает статус «Пришёл»."],
+  "İşleniyor…": ["Working…", "Обработка…"],
+  "Evet, ödemeyi iptal et": ["Yes, cancel payment", "Да, отменить оплату"],
+  "Randevu tamamen silinsin mi?": ["Delete this appointment completely?", "Удалить запись полностью?"],
+  "Randevu ve tüm hizmet satırları kalıcı olarak silinir, geri alınamaz. Müşteri yalnızca gelmeyecekse silmek yerine “Randevuyu iptal et”i kullanın.": ["The appointment and all its service lines are permanently deleted. This can't be undone. If the client just won't come, use “Cancel appointment” instead.", "Запись и все её услуги удаляются навсегда, без возможности восстановления. Если клиент просто не придёт, используйте «Отменить запись»."],
+  "Evet, kalıcı olarak sil": ["Yes, delete permanently", "Да, удалить навсегда"],
+  "Randevuyu sil": ["Delete appointment", "Удалить запись"],
+  "Randevuyu kaydet": ["Save appointment", "Сохранить запись"],
 };
 export default d;
