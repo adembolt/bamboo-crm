@@ -145,7 +145,9 @@ export function DayCalendar(props: {
       const el = scrollRef.current;
       if (el) {
         const shown = week ? week.dates : [date];
-        const target = shown.includes(todayIso()) ? minutesOfDay(new Date().toISOString()) - 60 : Math.min(...items.filter((i) => i.status !== "cancelled").map((i) => minutesOfDay(i.starts_at)), closeMin) - 30;
+        const live = items.filter((i) => i.status !== "cancelled").map((i) => minutesOfDay(i.starts_at));
+        const workStart = Math.min(...staff.flatMap((x) => hoursFor(x.id, shown[0]).w.map(([w]) => w)), salonOpen);
+        const target = shown.includes(todayIso()) ? minutesOfDay(new Date().toISOString()) - 60 : (live.length ? Math.min(...live) : workStart) - 30;
         el.scrollTop = Math.max(0, (target - openMin) * ppm);
       }
     }, 0);
@@ -303,7 +305,7 @@ export function DayCalendar(props: {
         {hiddenLoaded && hiddenWithItems.length > 0 && <span className="w-full text-[11px] text-warn">{t("Gizli ama bugün randevusu olan: {names}", { names: hiddenWithItems.map((s) => s.full_name).join(", ") })}</span>}
       </div>
       <div ref={scrollRef} className="overflow-auto max-h-[calc(100dvh-150px)] min-h-[420px] max-md:max-h-[calc(100dvh-262px)] max-md:min-h-[320px] overscroll-contain">
-        <div style={{ display: "grid", gridTemplateColumns: `${isMobile ? 40 : 46}px repeat(${columns.length}, minmax(${isMobile ? 112 : columns.length > 6 ? 96 : 120}px, 1fr))` }}>
+        <div style={{ paddingBottom: isMobile ? 96 : 0, display: "grid", gridTemplateColumns: `${isMobile ? 40 : 46}px repeat(${columns.length}, minmax(${isMobile ? 112 : columns.length > 6 ? 96 : 120}px, 1fr))` }}>
           {/* başlıklar */}
           <div className="sticky top-0 left-0 z-30 bg-surface border-b border-line grid place-items-center">
             {isMobile && <button type="button" onClick={() => setFilterOpen(true)} aria-label={t("Takvimde görünen personel")} className="w-10 h-10 grid place-items-center text-muted">

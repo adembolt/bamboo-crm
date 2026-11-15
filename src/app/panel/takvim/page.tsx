@@ -79,7 +79,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/panel/t
   );
 
   return (
-    <div className="mcal grid gap-4 max-md:-mx-3 max-md:-mt-3 max-md:gap-3 max-md:min-h-[100dvh] max-md:pb-2">
+    <div className="mcal grid content-start gap-4 max-md:-mx-3 max-md:-mt-3 max-md:gap-3 max-md:min-h-[100dvh] max-md:pb-2">
       <MobileCalHeader date={d} view={view} today={today} more={more} />
       <MobileFabs backHref={backHref} canWrite={canWrite} view={view} date={d} />
       <header className="max-md:hidden flex items-center gap-3 flex-wrap">

@@ -25,7 +25,7 @@ export function MobileCalHeader({ date, view, today, more }: { date: string; vie
   useEffect(() => {
     const el = strip.current?.querySelector<HTMLElement>("[data-on]");
     if (el && strip.current) strip.current.scrollLeft = el.offsetLeft - strip.current.clientWidth / 2 + el.clientWidth / 2;
-  }, [date]);
+  }, [date, view]);
 
   const seg = (v: View, label: string) => {
     const on = view === v || (v === "day" && view === "week");
@@ -52,7 +52,7 @@ export function MobileCalHeader({ date, view, today, more }: { date: string; vie
       </div>
 
       {view !== "month" && (
-        <div ref={strip} className="flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
+        <div ref={strip} className="relative flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
           <button type="button" aria-label={t("Tarih seç")} onClick={() => { const el = dateInput.current; if (!el) return; try { el.showPicker(); } catch { el.click(); } }}
             className="relative flex-none w-[46px] h-[44px] self-center rounded-xl grid place-items-center bg-[var(--surface)]">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><rect x="3.5" y="5" width="17" height="15" rx="2.5" /><path d="M3.5 9.5h17" /><path d="M8 13h.01M12 13h.01M16 13h.01M8 16.5h.01M12 16.5h.01M16 16.5h.01" strokeWidth="2.4" strokeLinecap="round" /></svg>
