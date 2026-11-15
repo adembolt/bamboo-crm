@@ -18,7 +18,7 @@ export function CalendarShell({ side, children }: { side: React.ReactNode; child
         <button type="button" onClick={toggle} className="hidden lg:grid absolute -right-2 top-2 z-40 w-5 h-10 place-items-center rounded-l-md border border-line bg-surface text-muted hover:text-ink text-xs shadow-card"
           title={open ? t("Sağ paneli gizle") : t("Sağ paneli göster")} aria-label={open ? t("Sağ paneli gizle") : t("Sağ paneli göster")} aria-expanded={open}>{open ? "›" : "‹"}</button>
       </div>
-      {open && <aside className="grid gap-3 lg:sticky lg:top-3 min-w-0">{side}</aside>}
+      {open && <aside className="max-md:hidden grid gap-3 lg:sticky lg:top-3 min-w-0">{side}</aside>}
     </div>
   );
 }

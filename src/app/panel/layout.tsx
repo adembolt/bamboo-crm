@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { BambooLogo } from "@/components/logo";
 import { UpdateBanner } from "@/components/update-banner";
 import { Nav } from "@/components/nav";
+import { MobileShell } from "@/components/mobile-shell";
 import { logout } from "@/app/login/actions";
 import { LangProvider } from "@/lib/i18n/client";
 import { LangSwitch } from "@/components/lang-switch";
@@ -14,7 +15,7 @@ export default async function PanelLayout({ children }: LayoutProps<"/panel">) {
   return (
     <LangProvider lang={lang}>
     <div className="flex-1 flex flex-col md:flex-row min-h-0">
-      <aside className="print:hidden md:w-52 md:flex-none md:border-r border-line bg-surface md:h-screen md:sticky md:top-0 md:overflow-y-auto flex md:flex-col items-center md:items-stretch gap-3 px-3 py-2 md:py-4 border-b md:border-b-0">
+      <aside className="print:hidden hidden md:flex md:w-52 md:flex-none md:border-r border-line bg-surface md:h-screen md:sticky md:top-0 md:overflow-y-auto md:flex-col items-center md:items-stretch gap-3 px-3 py-2 md:py-4 border-b md:border-b-0">
         <Link href="/panel/takvim" className="flex items-center gap-2 md:px-2 md:mb-2 rounded-lg hover:bg-sunk" title={t("Takvime dön")} aria-label={`Bamboo Beauty & Wellness — ${t("Takvime dön")}`}>
           <BambooLogo size={36} />
           <div className="leading-tight hidden sm:block">
@@ -32,7 +33,16 @@ export default async function PanelLayout({ children }: LayoutProps<"/panel">) {
           <button className="btn ghost sm w-full" type="submit">{t("Çıkış")}</button>
         </form>
       </aside>
-      <main className="flex-1 min-w-0 px-3 py-3 md:px-4 md:py-4"><UpdateBanner />{children}</main>
+      <MobileShell drawer={<>
+        <Nav vertical />
+        <form action={logout} className="grid gap-2 border-t border-line pt-3 px-1">
+          <div className="text-xs text-muted truncate">{profile?.full_name || user.email}</div>
+          <LangSwitch />
+          <a href="/sifre-yenile" className="text-[12px] text-muted hover:underline">{t("Şifre değiştir")}</a>
+          <button className="btn ghost sm w-full" type="submit">{t("Çıkış")}</button>
+        </form>
+      </>} />
+      <main className="flex-1 min-w-0 px-3 py-3 pb-28 md:px-4 md:py-4 md:pb-4"><UpdateBanner />{children}</main>
     </div>
     </LangProvider>
   );

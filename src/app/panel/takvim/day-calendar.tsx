@@ -20,7 +20,20 @@ import { weekdayOf, workWindows, offBlocks, offHours, isWorking, type SchedRow, 
 type ServiceLite = { id: string; category_id: string | null; code: string | null; name_tr: string; name_en: string; name_ru?: string | null; duration_min: number; buffer_min: number; price: number; kind: string };
 type CategoryLite = { id: string; name_tr: string; name_en?: string | null; name_ru?: string | null; sort_order: number; color: string };
 
-const PX_PER_MIN = 2; // 15 dk = 30px
+const PX_DESKTOP = 2; // 15 dk = 30px
+const PX_MOBILE = 1.2; // telefonda DIKIDI gibi daha sık: 1 saat = 72px
+
+/** Telefon genişliği (768px altı) */
+function useIsMobile() {
+  const [m, setM] = useState(false);
+  useEffect(() => {
+    const q = window.matchMedia("(max-width: 767px)");
+    const on = () => setM(q.matches);
+    on(); q.addEventListener("change", on);
+    return () => q.removeEventListener("change", on);
+  }, []);
+  return m;
+}
 const GRID_MIN = 15;
 
 const dayOf = (iso: string) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Istanbul" }).format(new Date(iso));
@@ -44,9 +57,14 @@ export function DayCalendar(props: {
   canWrite: boolean;
   openVisit?: string;
   newDraft?: { staffId: string; startHHMM: string; serviceId: string };
+  /** telefondaki + düğmesi: açılışta yeni randevu penceresi */
+  autoNew?: boolean;
 }) {
   const { date, staff, items, settings, canWrite } = props;
   const t = useT();
+  const isMobile = useIsMobile();
+  const ppm = isMobile ? PX_MOBILE : PX_DESKTOP;
+  const [filterOpen, setFilterOpen] = useState(false);
   const lang = useLang();
   const router = useRouter();
   const svcById = useMemo(() => new Map(props.services.map((s) => [s.id, s])), [props.services]);
@@ -128,13 +146,13 @@ export function DayCalendar(props: {
       if (el) {
         const shown = week ? week.dates : [date];
         const target = shown.includes(todayIso()) ? minutesOfDay(new Date().toISOString()) - 60 : Math.min(...items.filter((i) => i.status !== "cancelled").map((i) => minutesOfDay(i.starts_at)), closeMin) - 30;
-        el.scrollTop = Math.max(0, (target - openMin) * PX_PER_MIN);
+        el.scrollTop = Math.max(0, (target - openMin) * ppm);
       }
     }, 0);
     const iv = setInterval(tick, 60000);
     return () => { clearTimeout(first); clearInterval(iv); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, [date, ppm]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [hiddenLoaded, setHiddenLoaded] = useState(false);
   useEffect(() => {
@@ -150,6 +168,22 @@ export function DayCalendar(props: {
   }
   function toggleStaff(id: string) { const n = new Set(hidden); if (n.has(id)) n.delete(id); else n.add(id); persistHidden(n); }
   const [draft, setDraft] = useState<{ staffId: string | null; startHHMM: string; date?: string; visitId?: string; customer?: PickedCustomer; serviceId?: string } | null>(props.newDraft ? { ...props.newDraft, date: props.date } : null);
+  /** + düğmesi: ilk çalışan uzman, bugünse bir sonraki çeyrek saat, değilse mesai başı */
+  const quickDraft = () => {
+    const s0 = staff.find((x) => !hidden.has(x.id) && hoursFor(x.id, date).working) ?? staff.find((x) => !hidden.has(x.id)) ?? staff[0];
+    const start = date === todayIso() ? Math.ceil(minutesOfDay(new Date().toISOString()) / GRID_MIN) * GRID_MIN : (s0 ? hoursFor(s0.id, date).w[0]?.[0] : undefined) ?? salonOpen;
+    return { staffId: s0?.id ?? null, date, startHHMM: hhmm(Math.max(openMin, Math.min(start, closeMin - settings.slot_minutes))) };
+  };
+  const quickRef = useRef(quickDraft);
+  useEffect(() => { quickRef.current = quickDraft; });
+  useEffect(() => {
+    const onNew = () => { if (canWrite) setDraft(quickRef.current()); };
+    const onFilter = () => setFilterOpen(true);
+    window.addEventListener("bamboo-cal-new", onNew); window.addEventListener("bamboo-cal-filter", onFilter);
+    const id = props.autoNew ? setTimeout(onNew, 0) : undefined;
+    return () => { window.removeEventListener("bamboo-cal-new", onNew); window.removeEventListener("bamboo-cal-filter", onFilter); if (id) clearTimeout(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const byStaff = useMemo(() => {
     const m = new Map<string, DayItem[]>();
@@ -186,7 +220,7 @@ export function DayCalendar(props: {
     const a = minutesOfDay(it.starts_at), b = minutesOfDay(it.ends_at);
     const col = (e.currentTarget as HTMLElement).closest("[data-col]") as HTMLElement | null;
     const rect = col?.getBoundingClientRect();
-    const grab = rect ? openMin + (e.clientY - rect.top) / PX_PER_MIN - a : 0;
+    const grab = rect ? openMin + (e.clientY - rect.top) / ppm - a : 0;
     const d0 = dayOf(it.starts_at);
     dragRef.current = { mode, it, x0: e.clientX, y0: e.clientY, grab, a, dur: b - a, staffId: it.staff_id, date: d0, curMin: a, curStaff: it.staff_id, curDate: d0, curDur: b - a, active: false };
     if (mode === "resize") e.stopPropagation();
@@ -198,13 +232,13 @@ export function DayCalendar(props: {
         const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest("[data-col]") as HTMLElement | null;
         if (el) {
           const r = el.getBoundingClientRect();
-          const m = snap(openMin + (ev.clientY - r.top) / PX_PER_MIN - d.grab);
+          const m = snap(openMin + (ev.clientY - r.top) / ppm - d.grab);
           d.curMin = Math.max(openMin, Math.min(m, closeMin - d.dur));
           d.curStaff = el.dataset.staff || null;
           d.curDate = el.dataset.date || d.date;
         }
       } else {
-        const dy = (ev.clientY - d.y0) / PX_PER_MIN;
+        const dy = (ev.clientY - d.y0) / ppm;
         d.curDur = Math.max(GRID_MIN, Math.min(snap(d.dur + dy), closeMin - d.a));
       }
       setDrag({ ...d });
@@ -239,8 +273,8 @@ export function DayCalendar(props: {
   if (!week && byStaff.unassigned.length) columns.push({ key: "none", date, staffId: null, name: t("Atanmamış"), title: "", color: "#9aa69c", photo: null, kind: "staff", items: byStaff.unassigned });
 
   return (
-    <div className="panel p-0 overflow-hidden cal-light">
-      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-line bg-surface" aria-label={t("Takvimde görünen personel")}>
+    <div className="panel p-0 overflow-hidden cal-light max-md:rounded-none max-md:border-x-0 max-md:border-b-0">
+      <div className="max-md:hidden flex items-center gap-2 flex-wrap px-3 py-2 border-b border-line bg-surface" aria-label={t("Takvimde görünen personel")}>
         <span className="eyebrow mr-1">{week ? t("Uzman") : t("Göster")}</span>
         {week && staff.map((s) => (
           <button key={s.id} type="button" onClick={() => router.push(`/panel/takvim?v=week&d=${date}&s=${s.id}`)} aria-pressed={s.id === week.staffId}
@@ -268,10 +302,14 @@ export function DayCalendar(props: {
         </span>}
         {hiddenLoaded && hiddenWithItems.length > 0 && <span className="w-full text-[11px] text-warn">{t("Gizli ama bugün randevusu olan: {names}", { names: hiddenWithItems.map((s) => s.full_name).join(", ") })}</span>}
       </div>
-      <div ref={scrollRef} className="overflow-auto max-h-[calc(100dvh-150px)] min-h-[420px] overscroll-contain">
-        <div style={{ display: "grid", gridTemplateColumns: `46px repeat(${columns.length}, minmax(${columns.length > 6 ? 96 : 120}px, 1fr))` }}>
+      <div ref={scrollRef} className="overflow-auto max-h-[calc(100dvh-150px)] min-h-[420px] max-md:max-h-[calc(100dvh-262px)] max-md:min-h-[320px] overscroll-contain">
+        <div style={{ display: "grid", gridTemplateColumns: `${isMobile ? 40 : 46}px repeat(${columns.length}, minmax(${isMobile ? 112 : columns.length > 6 ? 96 : 120}px, 1fr))` }}>
           {/* başlıklar */}
-          <div className="sticky top-0 left-0 z-30 bg-surface border-b border-line" />
+          <div className="sticky top-0 left-0 z-30 bg-surface border-b border-line grid place-items-center">
+            {isMobile && <button type="button" onClick={() => setFilterOpen(true)} aria-label={t("Takvimde görünen personel")} className="w-10 h-10 grid place-items-center text-muted">
+              <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden><rect x="2" y="5" width="15" height="14" rx="2" /><path d="M2 9h15" /><path d="M6 12.5h.01M9.5 12.5h.01M13 12.5h.01M6 15.5h.01" strokeWidth="2.2" strokeLinecap="round" /><circle cx="20" cy="13" r="2.6" fill="currentColor" stroke="none" /><path d="M15.5 21c.4-2.6 2.2-4 4.5-4s4.1 1.4 4.5 4z" fill="currentColor" stroke="none" /></svg>
+            </button>}
+          </div>
           {columns.map((c) => c.kind === "day" ? (
             <div key={c.key} className={`sticky top-0 z-20 border-b border-l border-line px-1.5 py-2 min-w-0 text-center ${c.date === now?.date ? "bg-green-soft" : "bg-surface"}`}>
               <button type="button" onClick={() => router.push(`/panel/takvim?d=${c.date}`)} className="w-full grid leading-tight hover:underline" title={t("Gün görünümüne geç")}>
@@ -284,21 +322,23 @@ export function DayCalendar(props: {
           ) : (
             <div key={c.key} className="sticky top-0 z-20 bg-surface border-b border-l border-line px-1.5 py-2 min-w-0" title={`${c.name}${c.title ? " · " + c.title : ""}`}>
               <div className="flex flex-col items-center text-center gap-1 min-w-0">
-                {c.staffId ? <StaffAvatar staff={{ id: c.staffId, full_name: c.name, color: c.color, photo_url: c.photo }} size={36} editable={props.canManage} /> : <span className="w-9 h-9 rounded-full flex-none grid place-items-center text-muted" style={{ background: "var(--sunk)" }}>?</span>}
+                {c.staffId ? <StaffAvatar staff={{ id: c.staffId, full_name: c.name, color: c.color, photo_url: c.photo }} size={isMobile ? 44 : 36} editable={props.canManage && !isMobile} /> : <span className="w-9 h-9 rounded-full flex-none grid place-items-center text-muted" style={{ background: "var(--sunk)" }}>?</span>}
                 <div className="min-w-0 w-full leading-tight">
-                  <div className="font-semibold truncate text-[13px]">{c.name}</div>
-                  <div className="text-[10px] text-muted truncate">{c.title || t("{n} randevu", { n: c.items.length })}</div>
-                  {c.staffId && hoursLine(c.staffId, c.date, c.items)}
+                  <div className="font-semibold truncate text-[13px] max-md:text-[14px] max-md:font-medium">{c.name}</div>
+                  {!isMobile && <div className="text-[10px] text-muted truncate">{c.title || t("{n} randevu", { n: c.items.length })}</div>}
+                  {!isMobile && c.staffId && hoursLine(c.staffId, c.date, c.items)}
                 </div>
               </div>
             </div>
           ))}
 
           {/* saat ekseni */}
-          <div className="relative border-r border-line sticky left-0 z-10 bg-surface" style={{ height: totalMin * PX_PER_MIN }}>
-            {now && columns.some((c) => c.date === now.date) && now.min >= openMin && now.min <= closeMin && <div className="absolute right-0 px-1 text-[10px] font-bold text-white rounded-l -translate-y-1/2 z-10" style={{ top: (now.min - openMin) * PX_PER_MIN, background: "var(--bad)" }}>{hhmm(now.min)}</div>}
-            {Array.from({ length: Math.floor(totalMin / GRID_MIN) + 1 }, (_, i) => openMin + i * GRID_MIN).map((m) => (
-              <div key={m} className={`absolute left-0 right-0 px-2 -translate-y-1/2 ${m % 60 === 0 ? "text-[11px] text-muted font-semibold" : m % 30 === 0 ? "text-[10px] text-muted/80" : "text-[9px] text-muted/50"}`} style={{ top: (m - openMin) * PX_PER_MIN }}>
+          <div className="relative border-r border-line sticky left-0 z-10 bg-surface" style={{ height: totalMin * ppm, backgroundImage: isMobile ? `repeating-linear-gradient(to bottom, transparent 0, transparent ${60 * ppm - 1}px, var(--line) ${60 * ppm - 1}px, var(--line) ${60 * ppm}px)` : undefined }}>
+            {now && columns.some((c) => c.date === now.date) && now.min >= openMin && now.min <= closeMin && <div className="absolute right-0 px-1 text-[10px] font-bold text-white rounded-l -translate-y-1/2 z-10" style={{ top: (now.min - openMin) * ppm, background: "var(--bad)" }}>{hhmm(now.min)}</div>}
+            {Array.from({ length: Math.floor(totalMin / GRID_MIN) + 1 }, (_, i) => openMin + i * GRID_MIN).filter((m) => !isMobile || m % 60 === 0).map((m) => isMobile ? (
+              <div key={m} className="absolute left-0 right-0 text-center text-[13px] text-muted num" style={{ top: (m - openMin) * ppm + 4 }}>{hhmm(m)}</div>
+            ) : (
+              <div key={m} className={`absolute left-0 right-0 px-2 -translate-y-1/2 ${m % 60 === 0 ? "text-[11px] text-muted font-semibold" : m % 30 === 0 ? "text-[10px] text-muted/80" : "text-[9px] text-muted/50"}`} style={{ top: (m - openMin) * ppm }}>
                 {m % 60 === 0 || m % 30 === 0 ? hhmm(m) : `:${String(m % 60).padStart(2, "0")}`}
               </div>
             ))}
@@ -312,36 +352,36 @@ export function DayCalendar(props: {
               data-staff={col.staffId ?? ""}
               data-date={col.date}
               className={`relative border-l border-line ${drag?.active && drag.mode === "move" && drag.curStaff === col.staffId && drag.curDate === col.date ? "bg-green-soft/40" : ""}`}
-              style={{ height: totalMin * PX_PER_MIN, backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${GRID_MIN * PX_PER_MIN - 1}px, color-mix(in srgb, var(--line) 55%, transparent) ${GRID_MIN * PX_PER_MIN - 1}px, color-mix(in srgb, var(--line) 55%, transparent) ${GRID_MIN * PX_PER_MIN}px), repeating-linear-gradient(to bottom, transparent 0, transparent ${60 * PX_PER_MIN - 1}px, var(--line) ${60 * PX_PER_MIN - 1}px, var(--line) ${60 * PX_PER_MIN}px)` }}
+              style={{ height: totalMin * ppm, backgroundImage: isMobile ? `repeating-linear-gradient(to bottom, transparent 0, transparent ${60 * ppm - 1}px, var(--line) ${60 * ppm - 1}px, var(--line) ${60 * ppm}px)` : `repeating-linear-gradient(to bottom, transparent 0, transparent ${GRID_MIN * ppm - 1}px, color-mix(in srgb, var(--line) 55%, transparent) ${GRID_MIN * ppm - 1}px, color-mix(in srgb, var(--line) 55%, transparent) ${GRID_MIN * ppm}px), repeating-linear-gradient(to bottom, transparent 0, transparent ${60 * ppm - 1}px, var(--line) ${60 * ppm - 1}px, var(--line) ${60 * ppm}px)` }}
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest("[data-item]")) return;
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                onSlotClick(col, openMin + (e.clientY - rect.top) / PX_PER_MIN);
+                onSlotClick(col, openMin + (e.clientY - rect.top) / ppm);
               }}
               role={canWrite ? "button" : undefined}
               aria-label={t("{name} sütunu", { name: col.kind === "day" ? fmtDate(col.date) : col.name })}
             >
               {col.staffId && hoursFor(col.staffId, col.date).grey.map(([a, b]) => (
-                <div key={`g${a}`} aria-hidden className="absolute left-0 right-0 pointer-events-none" style={{ top: (a - openMin) * PX_PER_MIN, height: (b - a) * PX_PER_MIN, background: "color-mix(in srgb, var(--muted) 16%, transparent)" }} />
+                <div key={`g${a}`} aria-hidden className="absolute left-0 right-0 pointer-events-none" style={{ top: (a - openMin) * ppm, height: (b - a) * ppm, background: isMobile ? "repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 30%, transparent) 0 1px, transparent 1px 9px)" : "color-mix(in srgb, var(--muted) 16%, transparent)" }} />
               ))}
               {col.staffId && hoursFor(col.staffId, col.date).o.map((o) => {
                 const a = Math.max(openMin, o.a), b = Math.min(closeMin, o.b);
                 if (b <= a) return null;
-                return <div key={`o${o.a}`} className="absolute left-0 right-0 pointer-events-none text-[11px] font-semibold text-muted px-2 py-1" style={{ top: (a - openMin) * PX_PER_MIN, height: (b - a) * PX_PER_MIN, background: "repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 18%, transparent) 0 6px, color-mix(in srgb, var(--muted) 8%, transparent) 6px 12px)" }}>{o.reason ? t(o.reason) : t("Müsait değil")}</div>;
+                return <div key={`o${o.a}`} className="absolute left-0 right-0 pointer-events-none text-[11px] font-semibold text-muted px-2 py-1" style={{ top: (a - openMin) * ppm, height: (b - a) * ppm, background: "repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 18%, transparent) 0 6px, color-mix(in srgb, var(--muted) 8%, transparent) 6px 12px)" }}>{o.reason ? t(o.reason) : t("Müsait değil")}</div>;
               })}
               {drag?.active && drag.mode === "move" && drag.curStaff === col.staffId && drag.curDate === col.date && (
-                <div aria-hidden className="absolute left-1 right-1 rounded-lg border-2 border-dashed pointer-events-none z-20 px-2 py-1 text-[11px] font-bold" style={{ top: (drag.curMin - openMin) * PX_PER_MIN, height: Math.max(22, drag.dur * PX_PER_MIN - 2), borderColor: "var(--green)", background: "color-mix(in srgb, var(--green) 12%, var(--surface))" }}>
+                <div aria-hidden className="absolute left-1 right-1 rounded-lg border-2 border-dashed pointer-events-none z-20 px-2 py-1 text-[11px] font-bold" style={{ top: (drag.curMin - openMin) * ppm, height: Math.max(22, drag.dur * ppm - 2), borderColor: "var(--green)", background: "color-mix(in srgb, var(--green) 12%, var(--surface))" }}>
                   {hhmm(drag.curMin)}–{hhmm(drag.curMin + drag.dur)}{!workCheck(drag.curStaff, drag.curMin, drag.dur, drag.curDate) && <span className="text-warn"> · {t("çalışma saati dışı")}</span>}
                 </div>
               )}
-              {(() => { const nm = nowMinFor(col.date); return nm !== null && nm >= openMin && nm <= closeMin ? <div aria-hidden className="absolute left-0 right-0 h-0.5 z-[5] pointer-events-none" style={{ top: (nm - openMin) * PX_PER_MIN, background: "var(--bad)" }} /> : null; })()}
+              {(() => { const nm = nowMinFor(col.date); return nm !== null && nm >= openMin && nm <= closeMin ? <div aria-hidden className="absolute left-0 right-0 h-0.5 z-[5] pointer-events-none" style={{ top: (nm - openMin) * ppm, background: "var(--bad)" }} /> : null; })()}
               {col.items.map((it) => {
                 const a = minutesOfDay(it.starts_at), b = minutesOfDay(it.ends_at);
-                const top = (a - openMin) * PX_PER_MIN, h = Math.max(22, (b - a) * PX_PER_MIN - 2);
+                const top = (a - openMin) * ppm, h = Math.max(22, (b - a) * ppm - 2);
                 const c = it.visit.customer;
                 const multi = items.filter((x) => x.visit_id === it.visit_id && x.status !== "cancelled").length > 1;
                 const isDragged = drag?.active && drag.it.id === it.id;
-                const hh = isDragged && drag.mode === "resize" ? Math.max(22, drag.curDur * PX_PER_MIN - 2) : h;
+                const hh = isDragged && drag.mode === "resize" ? Math.max(22, drag.curDur * ppm - 2) : h;
                 const canDrag = canWrite && it.status !== "completed";
                 return (
                   <button
@@ -350,17 +390,31 @@ export function DayCalendar(props: {
                     onClick={() => { if (suppressClick.current) return; setSelectedVisit(it.visit_id); }}
                     onPointerDown={(e) => beginDrag(e, it, "move")}
                     onContextMenu={(e) => { e.preventDefault(); setMenuErr(""); setMenu({ x: Math.min(e.clientX, window.innerWidth - 230), y: Math.min(e.clientY, window.innerHeight - 330), it }); }}
-                    className={`absolute left-1 right-1 rounded-lg text-left px-2 py-1 overflow-hidden shadow-card border select-none flex flex-col justify-start items-stretch gap-px ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${isDragged && drag.mode === "move" ? "opacity-40" : ""}`}
+                    className={`absolute left-1 right-1 rounded-lg max-md:rounded-xl text-left px-2 py-1 max-md:px-2.5 max-md:py-1.5 overflow-hidden shadow-card border select-none flex flex-col justify-start items-stretch gap-px ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${isDragged && drag.mode === "move" ? "opacity-40" : ""}`}
                     style={{
                       top, height: hh, zIndex: isDragged ? 15 : undefined,
                       background: it.status === "no_show" ? "var(--bad-bg)" : it.visit.color ? `color-mix(in srgb, ${it.visit.color} 45%, var(--surface))` : it.status === "completed" || it.status === "arrived" ? "var(--sage-deep)" : "var(--sage)",
                       backgroundImage: it.break_min > 0 ? `repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--muted) 25%, transparent) 5px 7px)` : undefined,
-                      backgroundSize: it.break_min > 0 ? `100% ${it.break_min * PX_PER_MIN}px` : undefined,
+                      backgroundSize: it.break_min > 0 ? `100% ${it.break_min * ppm}px` : undefined,
                       backgroundPosition: "bottom", backgroundRepeat: "no-repeat",
-                      borderColor: col.color, borderLeftWidth: 4,
+                      borderColor: isMobile ? "transparent" : col.color, borderLeftWidth: isMobile ? 0 : 4,
+                      color: isMobile && it.status !== "no_show" && !it.visit.color ? "var(--sage-ink)" : undefined,
                     }}
                     title={[`${c ? fullName(c) : t("Müşteri yok")}${c?.phone ? " · " + c.phone : ""}`, `${fmtTime(it.starts_at)}–${fmtTime(it.ends_at)} · ${svcName(it)}`, `${t(STATUS_LABEL[it.status])}${it.price ? " · " + money(Number(it.price) - Number(it.discount || 0)) : ""}`, it.visit.notes || it.notes || ""].filter(Boolean).join("\n")}
                   >
+                    {isMobile ? <>
+                      <div className="text-[12.5px] num leading-tight flex items-center gap-1 min-w-0 opacity-90">
+                        <span className="truncate">{fmtTime(it.starts_at)} – {fmtTime(it.ends_at)}</span>
+                        <span className="ml-auto flex-none flex items-center gap-1">
+                          {(it.notes || it.visit.notes) && <span aria-label={t("Not")} className="w-4 h-4 rounded-full grid place-items-center bg-white/90 text-[9px]" style={{ color: "var(--sage-ink)" }}>✎</span>}
+                          {it.visit.source === "online" && <span aria-label={t("Online randevu")} className="text-[11px]">🌐</span>}
+                          <StatusDot status={it.status} t={t} />
+                        </span>
+                      </div>
+                      <div className={`text-[15px] font-semibold leading-tight ${hh >= 70 ? "line-clamp-2 break-words" : "truncate"}`}>{c ? fullName(c) : t("Müşteri yok")}</div>
+                      {c?.phone && hh >= 52 && <div className="text-[12.5px] num leading-tight truncate opacity-90">{c.phone}</div>}
+                      {hh >= 70 && <div className={`text-[12.5px] leading-tight opacity-90 break-words ${hh >= 130 ? "line-clamp-5" : hh >= 100 ? "line-clamp-3" : "line-clamp-1"}`}>{svcName(it)}</div>}
+                    </> : <>
                     <div className="text-[12px] font-bold leading-tight flex items-start gap-1 min-w-0">
                       <StatusDot status={it.status} t={t} />
                       <span className={hh >= 56 ? "line-clamp-2 break-words" : "truncate"}>{c ? fullName(c) : t("Müşteri yok")}</span>
@@ -373,6 +427,7 @@ export function DayCalendar(props: {
                       {(c?.no_show_count ?? 0) > 0 && <span className="text-bad" title={t("Gelmeme sayısı: {n}", { n: c!.no_show_count })}> · ⚠{c!.no_show_count}</span>}
                     </div>
                     {hh >= 44 && <div className={`text-[11px] text-muted leading-tight ${hh >= 80 ? "line-clamp-3" : hh >= 60 ? "line-clamp-2" : "truncate"}`}>{svcName(it)}</div>}
+                    </>}
                     {canDrag && <span aria-hidden onPointerDown={(e) => beginDrag(e, it, "resize")} className="absolute left-0 right-0 bottom-0 h-1.5 cursor-ns-resize" title={t("Süreyi değiştirmek için sürükleyin")} />}
                   </button>
                 );
@@ -381,6 +436,35 @@ export function DayCalendar(props: {
           ))}
         </div>
       </div>
+
+      {filterOpen && (
+        <div className="md:hidden fixed inset-0 z-[55]" role="dialog" aria-modal aria-label={t("Takvimde görünen personel")}>
+          <div className="absolute inset-0 bg-black/50" onClick={() => setFilterOpen(false)} />
+          <div className="absolute left-0 right-0 bottom-0 rounded-t-2xl bg-surface border-t border-line p-4 grid gap-3 max-h-[80vh] overflow-y-auto" style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}>
+            <div className="flex items-center justify-between"><b>{week ? t("Uzman") : t("Takvimde görünen personel")}</b><button type="button" className="btn ghost sm" onClick={() => setFilterOpen(false)} aria-label={t("Kapat")}>✕</button></div>
+            <div className="grid gap-1">
+              {staff.map((s) => {
+                const on = week ? s.id === week.staffId : !hidden.has(s.id);
+                const n = week ? items.filter((it) => it.staff_id === s.id && it.status !== "cancelled").length : byStaff.m.get(s.id)?.length ?? 0;
+                return (
+                  <button key={s.id} type="button" aria-pressed={on}
+                    onClick={() => { if (week) { setFilterOpen(false); router.push(`/panel/takvim?v=week&d=${date}&s=${s.id}`); } else toggleStaff(s.id); }}
+                    className={`flex items-center gap-3 rounded-xl px-2 py-2 text-left ${on ? "bg-sunk" : "opacity-60"}`}>
+                    <StaffAvatar staff={{ id: s.id, full_name: s.full_name, color: s.color, photo_url: s.photo_url }} size={36} />
+                    <span className="flex-1 min-w-0"><span className="block font-semibold truncate">{s.full_name}</span><span className="block text-xs text-muted">{t("{n} randevu", { n })}</span></span>
+                    <span aria-hidden className={`w-6 h-6 rounded-full grid place-items-center text-sm ${on ? "bg-[var(--accent)] text-white" : "border border-line"}`}>{on ? "✓" : ""}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {!week && <div className="flex flex-wrap gap-2">
+              {hidden.size > 0 && <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set())}>{t("Tümünü göster")}</button>}
+              <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set(staff.filter((s) => !hoursOf.get(s.id)?.working && !(byStaff.m.get(s.id)?.length)).map((s) => s.id)))}>{t("Sadece bugün çalışanlar")}</button>
+              <button type="button" className="btn ghost sm" onClick={() => persistHidden(new Set(staff.filter((s) => !(byStaff.m.get(s.id)?.length)).map((s) => s.id)))}>{t("Sadece randevusu olanlar")}</button>
+            </div>}
+          </div>
+        </div>
+      )}
 
       {menuErr && !menu && <div role="alert" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 pill bad shadow-card cursor-pointer" onClick={() => setMenuErr("")}>{menuErr}</div>}
       {menu && (() => {

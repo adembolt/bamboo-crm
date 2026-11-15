@@ -101,7 +101,7 @@ function bestHref(path: string) {
   return best;
 }
 
-export function Nav() {
+export function Nav({ vertical = false }: { vertical?: boolean } = {}) {
   const path = usePathname();
   const t = useT();
   const best = bestHref(path);
@@ -113,21 +113,21 @@ export function Nav() {
   }, [best]);
 
   return (
-    <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-y-auto flex-1 md:flex-none" aria-label={t("Ana menü")}>
+    <nav className={vertical ? "flex flex-col gap-1" : "flex md:flex-col gap-1 overflow-x-auto md:overflow-y-auto flex-1 md:flex-none"} aria-label={t("Ana menü")}>
       {NAV.map((it) => {
         if (it.children) {
           const has = it.children.some((c) => c.href === best);
           const isOpen = !!open[it.key];
           return (
-            <div key={it.key} className="flex md:flex-col gap-0.5">
+            <div key={it.key} className={vertical ? "flex flex-col gap-0.5" : "flex md:flex-col gap-0.5"}>
               <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [it.key]: !isOpen }))}
                 className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap text-left ${has && !isOpen ? "bg-green-soft text-green" : has ? "text-green" : "text-muted hover:bg-sunk hover:text-ink"}`}>
                 <span aria-hidden className="w-4 text-center">{it.icon}</span>
-                <span className="hidden sm:inline flex-1">{t(it.label)}</span>
-                <span aria-hidden className={`hidden sm:inline text-[10px] transition-transform ${isOpen ? "rotate-180" : ""}`}>▾</span>
+                <span className={vertical ? "flex-1" : "hidden sm:inline flex-1"}>{t(it.label)}</span>
+                <span aria-hidden className={`${vertical ? "" : "hidden sm:inline"} text-[10px] transition-transform ${isOpen ? "rotate-180" : ""}`}>▾</span>
               </button>
               {isOpen && (
-                <div className="flex md:flex-col gap-0.5 md:ml-4 md:pl-2 md:border-l md:border-line md:mb-1">
+                <div className={vertical ? "flex flex-col gap-0.5 ml-4 pl-2 border-l border-line mb-1" : "flex md:flex-col gap-0.5 md:ml-4 md:pl-2 md:border-l md:border-line md:mb-1"}>
                   {it.children.map((c) => (
                     <Link key={c.href} href={c.href} aria-current={best === c.href ? "page" : undefined}
                       className={`rounded-lg px-3 py-1.5 text-[13px] whitespace-nowrap ${best === c.href ? "bg-green-soft text-green font-semibold" : "text-muted hover:bg-sunk hover:text-ink"}`}>
@@ -144,7 +144,7 @@ export function Nav() {
           <Link key={it.key} href={it.href!} aria-current={active ? "page" : undefined}
             className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap ${active ? "bg-green-soft text-green" : "text-muted hover:bg-sunk hover:text-ink"}`}>
             <span aria-hidden className="w-4 text-center">{it.icon}</span>
-            <span className="hidden sm:inline">{t(it.label)}</span>
+            <span className={vertical ? "" : "hidden sm:inline"}>{t(it.label)}</span>
           </Link>
         );
       })}

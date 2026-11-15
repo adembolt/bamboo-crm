@@ -231,5 +231,15 @@ const d: Record<string, [string, string]> = {
   "Kullanım (sarf)": ["Usage (materials)", "Расход (материалы)"],
   "Sayım düzeltmesi": ["Count adjustment", "Корректировка остатка"],
   "Eksik — yorum isteyen mesajlar Google'a yönlendiremez": ["Missing — review requests cannot point to Google", "Не задана — запросы отзывов не ведут в Google"],
+  // mobil takvim
+  "Liste": ["List", "Список"],
+  "Tarih seç": ["Pick a date", "Выбрать дату"],
+  "Gün görünümü": ["Day view", "Вид по дням"],
+  "Hafta görünümü (tek uzman)": ["Week view (one specialist)", "Неделя (один мастер)"],
+  "Bu gün randevu yok.": ["No appointments on this day.", "В этот день записей нет."],
+  "Menü": ["Menu", "Меню"],
+  "Alt menü": ["Bottom menu", "Нижнее меню"],
+  "Kontrol": ["Control", "Контроль"],
+  "Çalışma": ["Schedule", "График"],
 };
 export default d;

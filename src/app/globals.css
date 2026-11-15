@@ -18,7 +18,23 @@
   }
 }
 
-/* Takvim: panel koyu temada olsa da her zaman açık renk; randevu kutuları adaçayı yeşili */
+/* Mobil takvim: DIKIDI uygulamasındaki gibi koyu tema, mavi seçim, yeşil randevu kutuları */
+@media (max-width: 767px) {
+  .mcal {
+    --ground: #000000; --surface: #1c1c1e; --sunk: #2c2c2e; --ink: #f2f2f7; --muted: #8e8e93; --line: #38383a;
+    --green: #46b862; --green-soft: #1d3424; --gold: #d2ae6f; --gold-soft: #322a1c;
+    --good: #5bc977; --warn: #e3aa3d; --bad: #ff5a4f; --good-bg: #183222; --warn-bg: #342a15; --bad-bg: #3a1d1a;
+    --accent: #3b8ff5; --chip: #2c2c2e;
+    --sage: #8fd38a; --sage-deep: #77c271; --sage-ink: #3c7d34;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
+    color-scheme: dark;
+    background: #000; color: var(--ink);
+  }
+}
+.mtabbar { --accent: #3b8ff5; }
+
+/* Takvim: panel koyu temada olsa da her zaman açık renk (masaüstü); randevu kutuları adaçayı yeşili */
+@media (min-width: 768px) {
 .cal-light {
   --ground: #f3f6f1; --surface: #ffffff; --sunk: #eef3ec; --ink: #14261a; --muted: #5b6b5f; --line: #dce4da;
   --green: #0a7a1e; --green-soft: #ddefdf; --gold: #a8854a; --gold-soft: #f3ead9;
@@ -28,6 +44,7 @@
   color-scheme: light;
   background: var(--surface);
   color: var(--ink);
+}
 }
 
 @theme inline {
