@@ -404,9 +404,14 @@ export function DayCalendar(props: {
                     }}
                     title={[`${c ? fullName(c) : t("Müşteri yok")}${c?.phone ? " · " + c.phone : ""}`, `${fmtTime(it.starts_at)}–${fmtTime(it.ends_at)} · ${svcName(it)}`, `${t(STATUS_LABEL[it.status])}${it.price ? " · " + money(Number(it.price) - Number(it.discount || 0)) : ""}`, it.visit.notes || it.notes || ""].filter(Boolean).join("\n")}
                   >
-                    {isMobile ? <>
+                    {isMobile && hh < 40 ? (
+                      <div className="text-[12.5px] leading-tight flex items-center gap-1 min-w-0">
+                        <span className="num opacity-90 flex-none">{fmtTime(it.starts_at)}</span>
+                        <b className="truncate">{c ? fullName(c) : t("Müşteri yok")}</b>
+                      </div>
+                    ) : isMobile ? <>
                       <div className="text-[12.5px] num leading-tight flex items-center gap-1 min-w-0 opacity-90">
-                        <span className="truncate">{fmtTime(it.starts_at)} – {fmtTime(it.ends_at)}</span>
+                        <span className="truncate">{fmtTime(it.starts_at)}–{fmtTime(it.ends_at)}</span>
                         <span className="ml-auto flex-none flex items-center gap-1">
                           {(it.notes || it.visit.notes) && <span aria-label={t("Not")} className="w-4 h-4 rounded-full grid place-items-center bg-white/90 text-[9px]" style={{ color: "var(--sage-ink)" }}>✎</span>}
                           {it.visit.source === "online" && <span aria-label={t("Online randevu")} className="text-[11px]">🌐</span>}
