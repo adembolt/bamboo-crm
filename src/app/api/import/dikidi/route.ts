@@ -13,6 +13,7 @@ const cors = {
   "Access-Control-Allow-Origin": ORIGIN,
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "content-type, x-import-token",
+  "Access-Control-Allow-Private-Network": "true",
 };
 const json = (b: unknown, status = 200) => Response.json(b, { status, headers: cors });
 

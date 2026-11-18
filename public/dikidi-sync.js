@@ -6,7 +6,8 @@
   if (window.__bambooSyncRunning) return;
   var TOKEN = window.__BAMBOO_TOKEN;
   var FULL = !!window.__BAMBOO_FULL;
-  var SITE = "https://bamboo-crm-tau.vercel.app";
+  // Bamboo adresi: betiğin yüklendiği adres (iMac ya da bulut). Eski yer imleri için yedekler.
+  var SITE = window.__BAMBOO_SITE || (document.currentScript && new URL(document.currentScript.src).origin) || "https://bamboo-crm-tau.vercel.app";
   if (!/(^|\.)dikidi\.net$/.test(location.hostname)) { alert("Bu düğme DIKIDI panelinde (dikidi.net) çalışır."); return; }
   var company = (window.backend && backend.company && backend.company.id) || (location.search.match(/company=(\d+)/) || [])[1];
   if (!company) { alert("DIKIDI şirket paneli açık değil. Önce DIKIDI'de Randevular sayfasını açın."); return; }

@@ -5,8 +5,8 @@ import { useT } from "@/lib/i18n/client";
 import type { TFn } from "@/lib/i18n/core";
 import { getWaStatus, createSetupCode, sendWaCommand, type WaStatus } from "./actions";
 
-const INSTALL_CMD = "curl -fsSL https://bamboo-crm-tau.vercel.app/wa/install.sh | bash";
-const POLL_MS = 3000;
+const installCmd = (site: string) => `curl -fsSL ${site}/wa/install.sh | BAMBOO_WA_SITE=${site} bash`;
+const POLL_MS = 5000; // yalnızca sayfa görünürken
 
 function ago(sec: number, t: TFn) {
   if (sec < 60) return t("{n} sn önce", { n: sec });
@@ -32,6 +32,8 @@ export function WaPanel({ initial }: { initial: WaStatus }) {
   const t = useT();
   const [s, setS] = useState<WaStatus>(initial);
   const [svg, setSvg] = useState<string | null>(null);
+  // Kurulum komutu panelin açıldığı adrese göre (iMac / bulut); sunucuda bilinmediği için ilk çizimde bulut adresi
+  const [site] = useState(() => (typeof window === "undefined" ? "https://bamboo-crm-tau.vercel.app" : window.location.origin));
   const [code, setCode] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
@@ -40,7 +42,7 @@ export function WaPanel({ initial }: { initial: WaStatus }) {
   useEffect(() => {
     let alive = true, busy = false;
     const tick = async () => {
-      if (busy) return;
+      if (busy || document.hidden) return; // arka plandaki sekme sunucuyu yormasın
       busy = true;
       try {
         const r = await getWaStatus();
@@ -127,7 +129,7 @@ export function WaPanel({ initial }: { initial: WaStatus }) {
               <span className="flex gap-2 items-center"><span className="inp flex-1"><input readOnly value={code} className="font-mono" onFocus={(e) => e.currentTarget.select()} /></span><CopyBtn text={code} /></span>
             </label>
             <label className="f">{t("Kurulum komutu")}
-              <span className="flex gap-2 items-center"><span className="inp flex-1"><input readOnly value={INSTALL_CMD} className="font-mono" onFocus={(e) => e.currentTarget.select()} /></span><CopyBtn text={INSTALL_CMD} /></span>
+              <span className="flex gap-2 items-center"><span className="inp flex-1"><input readOnly value={installCmd(site)} className="font-mono" onFocus={(e) => e.currentTarget.select()} /></span><CopyBtn text={installCmd(site)} /></span>
             </label>
             <ol className="list-decimal pl-5 text-sm grid gap-1">
               <li>{t("Salondaki Mac'te Terminal'i açın (Spotlight: ⌘ + Boşluk → \"Terminal\").")}</li>

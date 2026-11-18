@@ -2,9 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n/client";
 
-const SRC = "https://bamboo-crm-tau.vercel.app/dikidi-sync.js";
-const code = (token: string, full: boolean) =>
-  `javascript:(function(){window.__BAMBOO_TOKEN=${JSON.stringify(token)};window.__BAMBOO_FULL=${full ? 1 : 0};var s=document.createElement('script');s.src='${SRC}?v='+Date.now();document.body.appendChild(s);})();`;
+/* Düğme, panelin açıldığı adrese (iMac: Tailscale adresi ya da localhost, bulut: vercel) bağlanır.
+   Sunucu tarafında oluşturulurken adres bilinmediği için yalnızca tarayıcıda hesaplanır. */
+const siteNow = () => (typeof window === "undefined" ? "" : window.location.origin);
+const code = (token: string, full: boolean, site = siteNow()) =>
+  `javascript:(function(){window.__BAMBOO_TOKEN=${JSON.stringify(token)};window.__BAMBOO_FULL=${full ? 1 : 0};window.__BAMBOO_SITE=${JSON.stringify(site)};var s=document.createElement('script');s.src=${JSON.stringify(site + "/dikidi-sync.js")}+'?v='+Date.now();document.body.appendChild(s);})();`;
 
 /** React javascript: bağlantılarını engellediği için href DOM'a elle yazılır. */
 export function Bookmarklet({ token }: { token: string }) {

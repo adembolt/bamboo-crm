@@ -7,7 +7,7 @@ import type { WaState } from "@/lib/database.types";
 /* Panel ↔ wa_bridge. Oturum istemcisi kullanılır (RLS: is_manager); token_hash sütununa SELECT
    yetkisi yoktur (bkz. 0013_whatsapp_bridge.sql), bu yüzden hep açık sütun listesi seçilir. */
 
-const STALE_SEC = 45;
+const STALE_SEC = 75; // köprü 30 sn'de bir sinyal gönderir
 
 export type WaStatus = {
   state: WaState;

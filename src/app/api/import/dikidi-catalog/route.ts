@@ -11,6 +11,7 @@ const corsFor = (origin: string | null) => ({
   "Access-Control-Allow-Origin": origin && ORIGINS.includes(origin) ? origin : ORIGINS[0],
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "content-type, x-import-token",
+  "Access-Control-Allow-Private-Network": "true", // DIKIDI (internet) → iMac (yerel/Tailscale) isteği için Chrome izni
   Vary: "Origin",
 });
 

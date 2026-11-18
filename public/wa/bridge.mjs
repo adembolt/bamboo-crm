@@ -16,7 +16,7 @@ import os from "node:os";
 import path from "node:path";
 import makeWASocket, { useMultiFileAuthState as loadMultiFileAuthState, DisconnectReason, Browsers, fetchLatestBaileysVersion } from "baileys";
 
-const BRIDGE_VERSION = "1.0.0";
+const BRIDGE_VERSION = "1.0.1";
 const HOME = process.env.BAMBOO_WA_HOME || path.join(os.homedir(), "BambooWhatsApp");
 const AUTH_DIR = path.join(HOME, "auth");
 const LOG_FILE = path.join(HOME, "bridge.log");
@@ -121,8 +121,12 @@ let hbInFlight = false;
 let hbAgain = false;
 let authFailCount = 0;
 
+let lastBeatAt = 0;
+const MIN_GAP_MS = 5_000;        // durum çok sık değişse bile en fazla 5 saniyede bir sinyal
+
 function scheduleHeartbeat(ms) {
   if (!ENDPOINT) return;
+  ms = Math.max(ms, lastBeatAt + MIN_GAP_MS - Date.now(), 0);
   // Gönderim sürerken gelen "hemen gönder" isteği, bitince hemen yeni bir sinyal olarak gider
   if (hbInFlight) { if (ms === 0) hbAgain = true; return; }
   clearTimeout(hbTimer);
@@ -132,7 +136,10 @@ function scheduleHeartbeat(ms) {
 async function heartbeat() {
   if (hbInFlight) { hbAgain = true; return; }
   hbInFlight = true;
-  let next = state === "qr" ? 2_000 : 10_000;
+  lastBeatAt = Date.now();
+  // Her durumda 30 sn (QR ya da durum değişince zaten hemen gider).
+  // (Eskiden QR'da 2 sn idi: telefon bağlanmayınca ayda 1 milyondan fazla çağrı yapıp Vercel'i durdurdu.)
+  let next = 30_000;
   try {
     const u = me();
     const res = await fetch(ENDPOINT, {
